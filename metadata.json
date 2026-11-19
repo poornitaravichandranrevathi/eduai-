@@ -1,0 +1,6 @@
+{
+  "name": "EduSphere AI",
+  "description": "Intelligent academic copilot for coursework tracking, syllabus timelines, thesis structuring, research citations, and active recall mastery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,423 @@
+{
+  "scholar": {
+    "name": "Elena Rostova",
+    "program": "M.S. Computational Neuroscience & AI",
+    "institution": "ETH Applied Intelligence Lab",
+    "term": "Fall Term 2026",
+    "gpa": 3.92,
+    "avatarUrl": "/src/assets/images/avatar_academic_scholar_1794995660870.jpg",
+    "thesisTitle": "Sparse Mechanistic Interpretability in Multimodal Transformer Memory Hierarchies"
+  },
+  "courses": [
+    {
+      "id": "cs-482",
+      "code": "CS 482",
+      "title": "Neural Systems & Sparse Representations",
+      "instructor": "Prof. Julian Vance",
+      "credits": 4,
+      "term": "Fall 2026",
+      "status": "active",
+      "grade": "A",
+      "currentScore": 95,
+      "weeklyHoursTarget": 9,
+      "imageUrl": "/src/assets/images/course_neural_systems_1794995662375.jpg",
+      "description": "Computational principles of cortical circuits, sparse coding dictionaries, predictive coding, and mechanistic circuit discovery in deep neural networks.",
+      "modules": [
+        {
+          "id": "mod-482-1",
+          "courseId": "cs-482",
+          "week": 1,
+          "title": "Hodgkin-Huxley & Integrate-and-Fire Dynamics",
+          "topicSummary": "Membrane conductance ODEs, refractory periods, and firing rate approximations.",
+          "completed": true,
+          "dueDate": "2026-09-18"
+        },
+        {
+          "id": "mod-482-2",
+          "courseId": "cs-482",
+          "week": 3,
+          "title": "Olshausen-Field Sparse Coding Dictionaries",
+          "topicSummary": "L1 regularization, Gabor receptive fields, and iterative shrinkage thresholding.",
+          "completed": true,
+          "dueDate": "2026-10-02"
+        },
+        {
+          "id": "mod-482-3",
+          "courseId": "cs-482",
+          "week": 6,
+          "title": "Sparse Autoencoders for Polysemantic Neurons",
+          "topicSummary": "Superposition hypothesis, k-sparse feature extraction, and dead-latent resampling.",
+          "completed": true,
+          "dueDate": "2026-10-23"
+        },
+        {
+          "id": "mod-482-4",
+          "courseId": "cs-482",
+          "week": 9,
+          "title": "Causal Path Patching & Induction Circuits",
+          "topicSummary": "Activation patching, attribution graphs, and attention head composition.",
+          "completed": false,
+          "dueDate": "2026-11-22"
+        },
+        {
+          "id": "mod-482-5",
+          "courseId": "cs-482",
+          "week": 12,
+          "title": "Predictive Coding vs. Backpropagation",
+          "topicSummary": "Energy-based local plasticity rules and hierarchical error units.",
+          "completed": false,
+          "dueDate": "2026-12-06"
+        }
+      ]
+    },
+    {
+      "id": "phys-410",
+      "code": "PHYS 410",
+      "title": "Quantum Information & Error Correction",
+      "instructor": "Dr. Kenji Takahashi",
+      "credits": 4,
+      "term": "Fall 2026",
+      "status": "active",
+      "grade": "A-",
+      "currentScore": 91,
+      "weeklyHoursTarget": 8,
+      "imageUrl": "/src/assets/images/course_quantum_info_1794995661609.jpg",
+      "description": "Density operators, entanglement entropy, stabilizer formalism, surface codes, and fault-tolerant quantum circuit thresholds.",
+      "modules": [
+        {
+          "id": "mod-410-1",
+          "courseId": "phys-410",
+          "week": 1,
+          "title": "Bloch Sphere Geometry & Kraus Channels",
+          "topicSummary": "Depolarizing, amplitude-damping, and phase-flip noise operators.",
+          "completed": true,
+          "dueDate": "2026-09-20"
+        },
+        {
+          "id": "mod-410-2",
+          "courseId": "phys-410",
+          "week": 4,
+          "title": "Stabilizer Codes & Pauli Group Symmetries",
+          "topicSummary": "Shor 9-qubit code, Steane [[7,1,3]] code, and syndrome extraction.",
+          "completed": true,
+          "dueDate": "2026-10-11"
+        },
+        {
+          "id": "mod-410-3",
+          "courseId": "phys-410",
+          "week": 8,
+          "title": "Toric & Surface Code Decoding",
+          "topicSummary": "Minimum-weight perfect matching and logical error threshold bounds.",
+          "completed": false,
+          "dueDate": "2026-11-24"
+        },
+        {
+          "id": "mod-410-4",
+          "courseId": "phys-410",
+          "week": 11,
+          "title": "Magic State Distillation & Fault Tolerance",
+          "topicSummary": "Eastin-Knill theorem and non-Clifford T-gate synthesis.",
+          "completed": false,
+          "dueDate": "2026-12-10"
+        }
+      ]
+    },
+    {
+      "id": "stat-390",
+      "code": "STAT 390",
+      "title": "High-Dimensional Statistical Learning",
+      "instructor": "Prof. Nadia Al-Mansoor",
+      "credits": 3,
+      "term": "Fall 2026",
+      "status": "active",
+      "grade": "A",
+      "currentScore": 94,
+      "weeklyHoursTarget": 6,
+      "imageUrl": "",
+      "description": "Concentration inequalities, Rademacher complexity, random matrix spectra, and double-descent generalization bounds.",
+      "modules": [
+        {
+          "id": "mod-390-1",
+          "courseId": "stat-390",
+          "week": 2,
+          "title": "Sub-Gaussian Concentration & Matrix Bernstein",
+          "topicSummary": "Hoeffding bounds, epsilon-nets, and covariance estimation in p > n.",
+          "completed": true,
+          "dueDate": "2026-09-25"
+        },
+        {
+          "id": "mod-390-2",
+          "courseId": "stat-390",
+          "week": 5,
+          "title": "Marchenko-Pastur Law & Benign Overfitting",
+          "topicSummary": "Empirical spectral distributions of Wishart matrices and ridgeless regression.",
+          "completed": true,
+          "dueDate": "2026-10-18"
+        },
+        {
+          "id": "mod-390-3",
+          "courseId": "stat-390",
+          "week": 9,
+          "title": "PAC-Bayes Bounds & Sharpness-Aware Minima",
+          "topicSummary": "KL-divergence generalization certificates for overparameterized models.",
+          "completed": false,
+          "dueDate": "2026-11-26"
+        }
+      ]
+    },
+    {
+      "id": "phil-312",
+      "code": "PHIL 312",
+      "title": "Epistemology of Formal & Empirical Models",
+      "instructor": "Prof. Henrik Lindqvist",
+      "credits": 3,
+      "term": "Spring 2026",
+      "status": "completed",
+      "grade": "A",
+      "currentScore": 97,
+      "weeklyHoursTarget": 5,
+      "imageUrl": "",
+      "description": "Philosophy of scientific explanation, mechanistic vs. covering-law models, and epistemic opacity in computational simulations.",
+      "modules": [
+        {
+          "id": "mod-312-1",
+          "courseId": "phil-312",
+          "week": 1,
+          "title": "Deductive-Nomological vs. Mechanistic Explanation",
+          "topicSummary": "Hempel, Craver, and multi-level causal interventions.",
+          "completed": true,
+          "dueDate": "2026-02-14"
+        },
+        {
+          "id": "mod-312-2",
+          "courseId": "phil-312",
+          "week": 6,
+          "title": "Epistemic Opacity in Deep Learning Systems",
+          "topicSummary": "Humphreys opacity criterion and formal verification limits.",
+          "completed": true,
+          "dueDate": "2026-04-02"
+        }
+      ]
+    }
+  ],
+  "notes": [
+    {
+      "id": "note-1",
+      "courseId": "cs-482",
+      "title": "Scaling Monosemanticity via Top-K Sparse Autoencoders",
+      "authors": "Templeton, Conerly, Marcus, et al.",
+      "year": "2024",
+      "publication": "Transformer Circuits Thread",
+      "citationKey": "templeton2024scaling",
+      "summary": "Dictionary learning with Top-K activation sparsity isolates interpretable, causally steerable features across middle transformer residual streams while curbing feature shrinkage.",
+      "body": "Key Technical Findings:\n1. Superposition occurs when models represent more features (M) than residual stream dimensions (d), organizing features in almost-orthogonal polytope geometries.\n2. Top-K SAEs enforce exact L0 sparsity per token without an L1 penalty coefficient, eliminating activation shrinkage.\n3. Auxiliary loss on dead latents (k_aux = 512) prevents dictionary collapse beyond 1M latent features.\n\nThesis Relevance:\nDirectly informs Chapter 3 ablation comparing Top-K vs. JumpReLU SAEs on cross-modal vision-language attention sinks.",
+      "tags": [
+        "Sparse Autoencoders",
+        "Interpretability",
+        "Superposition"
+      ],
+      "updatedAt": "2026-11-16T18:40:00Z"
+    },
+    {
+      "id": "note-2",
+      "courseId": "phys-410",
+      "title": "Threshold Theorem & Surface Code Syndrome Graphs",
+      "authors": "Fowler, Mariantoni, Martinis, Cleland",
+      "year": "2012",
+      "publication": "Physical Review A",
+      "citationKey": "fowler2012surface",
+      "summary": "Planar 2D nearest-neighbor surface codes achieve ~1% fault-tolerant physical error threshold using X/Z stabilizer plaquettes and minimum-weight perfect matching.",
+      "body": "Stabilizer Lattice Notes:\n- Data qubits sit on lattice edges; X-checks (star) and Z-checks (plaquette) commute everywhere because adjacent checks share exactly 0 or 2 qubits.\n- Logical X_L and Z_L operators correspond to non-trivial homology chains spanning opposite boundaries.\n- Decoding maps syndrome defects to spacetime edges and solves MWPM via Blossom algorithm in O(V^3) worst-case, amortized near-linear for sparse noise.",
+      "tags": [
+        "Surface Codes",
+        "Stabilizers",
+        "MWPM"
+      ],
+      "updatedAt": "2026-11-15T14:20:00Z"
+    },
+    {
+      "id": "note-3",
+      "courseId": "stat-390",
+      "title": "Benign Overfitting in Linear & Kernel Regimes",
+      "authors": "Bartlett, Long, Lugosi, Tsigler",
+      "year": "2020",
+      "publication": "PNAS",
+      "citationKey": "bartlett2020benign",
+      "summary": "Minimum-norm interpolators generalize accurately despite zero training error when the data covariance exhibits a small effective rank k* and a long flat tail of small eigenvalues.",
+      "body": "Conditions for Benign Overfitting:\n1. Signal energy concentrates in k* << n leading eigenvectors (low effective rank).\n2. Remaining p - k* eigenvalues are sufficiently small and spread out so label noise is absorbed harmlessly across many orthogonal directions.\n3. Implication for high-dimensional feature dictionaries: isotropic noise variance acts as implicit ridge regularization.",
+      "tags": [
+        "Generalization",
+        "Random Matrix",
+        "Overfitting"
+      ],
+      "updatedAt": "2026-11-12T09:15:00Z"
+    }
+  ],
+  "flashcards": [
+    {
+      "id": "fc-1",
+      "courseId": "cs-482",
+      "front": "Why do Top-K Sparse Autoencoders reduce feature activation shrinkage compared to L1-penalized SAEs?",
+      "back": "L1 penalties pull every non-zero latent activation toward zero regardless of magnitude, causing systematic underestimation. Top-K enforces sparsity structurally by keeping only the k largest activations without shrinking their magnitudes.",
+      "hint": "Think about how L1 regularization biases non-zero coefficients.",
+      "mastery": 3,
+      "lastReviewedAt": "2026-11-17T20:10:00Z"
+    },
+    {
+      "id": "fc-2",
+      "courseId": "cs-482",
+      "front": "What geometric theorem explains why N dimensions can store exponentially many nearly-orthogonal features?",
+      "back": "The Johnson-Lindenstrauss Lemma: in an N-dimensional Euclidean space, exp(O(N * epsilon^2)) unit vectors can exist with pairwise inner products bounded by epsilon.",
+      "hint": "Named after two mathematicians; relates dimension N to pairwise cosine similarity.",
+      "mastery": 2,
+      "lastReviewedAt": "2026-11-16T19:00:00Z"
+    },
+    {
+      "id": "fc-3",
+      "courseId": "phys-410",
+      "front": "Why do X-type (star) and Z-type (plaquette) stabilizers commute in the surface code?",
+      "back": "Any neighboring star and plaquette share either 0 or 2 data qubits. Since XZ = -ZX on a single qubit, two shared qubits contribute (-1)^2 = +1, so the multi-qubit operators commute.",
+      "hint": "Count the number of overlapping edges between a vertex star and a face plaquette.",
+      "mastery": 3,
+      "lastReviewedAt": "2026-11-17T11:30:00Z"
+    },
+    {
+      "id": "fc-4",
+      "courseId": "phys-410",
+      "front": "What does the Eastin-Knill theorem forbid for quantum error-correcting codes?",
+      "back": "No quantum error-correcting code can implement a universal gate set using solely transversal (bitwise) gates.",
+      "hint": "Relates transversality and gate universality; bypassed via magic state distillation.",
+      "mastery": 1,
+      "lastReviewedAt": "2026-11-14T16:45:00Z"
+    },
+    {
+      "id": "fc-5",
+      "courseId": "stat-390",
+      "front": "In Bartlett et al. (2020), what two spectral properties of the covariance matrix enable benign overfitting?",
+      "back": "1) A low effective rank (few large eigenvalues capturing signal), and 2) a high-dimensional flat tail of small eigenvalues (large effective dimension R_k) that absorbs noise without inflating prediction variance.",
+      "hint": "Effective rank r_k and effective dimension R_k.",
+      "mastery": 2,
+      "lastReviewedAt": "2026-11-15T10:00:00Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1",
+      "courseId": "cs-482",
+      "title": "Run causal activation patching ablation on Layer 14 induction heads",
+      "type": "Research",
+      "dueDate": "2026-11-20",
+      "estimatedMinutes": 120,
+      "priority": "high",
+      "status": "in_progress"
+    },
+    {
+      "id": "task-2",
+      "courseId": "phys-410",
+      "title": "Problem Set 6: MWPM decoding on d=5 rotated surface code",
+      "type": "Assignment",
+      "dueDate": "2026-11-21",
+      "estimatedMinutes": 90,
+      "priority": "high",
+      "status": "todo"
+    },
+    {
+      "id": "task-3",
+      "courseId": "stat-390",
+      "title": "Derive PAC-Bayes KL generalization bound for Problem 3",
+      "type": "Assignment",
+      "dueDate": "2026-11-23",
+      "estimatedMinutes": 75,
+      "priority": "medium",
+      "status": "todo"
+    },
+    {
+      "id": "task-4",
+      "courseId": "cs-482",
+      "title": "Draft Section 2.3 on cross-modal superposition geometry",
+      "type": "Research",
+      "dueDate": "2026-11-24",
+      "estimatedMinutes": 110,
+      "priority": "medium",
+      "status": "todo"
+    },
+    {
+      "id": "task-5",
+      "courseId": "phys-410",
+      "title": "Review Kraus operator completeness proof for midterm",
+      "type": "Exam Prep",
+      "dueDate": "2026-11-17",
+      "estimatedMinutes": 45,
+      "priority": "low",
+      "status": "done"
+    }
+  ],
+  "thesisChapters": [
+    {
+      "id": "chap-1",
+      "orderIndex": 1,
+      "title": "1. Introduction & Problem Formulation",
+      "targetWords": 1200,
+      "status": "Finalized",
+      "updatedAt": "2026-11-10T15:00:00Z",
+      "content": "Modern multimodal transformers exhibit remarkable zero-shot reasoning across visual and linguistic domains, yet their internal representations remain heavily polysemantic. When a single residual stream neuron fires for both syntactic punctuation and geometric edge orientation, standard probing methods fail to disentangle causal mechanisms.\n\nThis thesis investigates whether sparse dictionary learning—specifically Top-K and gated sparse autoencoders—can isolate modality-invariant conceptual latents across intermediate attention layers without degrading downstream calibration."
+    },
+    {
+      "id": "chap-2",
+      "orderIndex": 2,
+      "title": "2. Literature Review: Superposition & Circuit Discovery",
+      "targetWords": 1800,
+      "status": "Revising",
+      "updatedAt": "2026-11-15T18:30:00Z",
+      "content": "Building on Elhage et al. (2022), neural networks pack more independent features than available orthogonal basis vectors whenever feature activation is sparse. Recent work by Templeton et al. (2024) scales dictionary learning to millions of latents, demonstrating monosemantic steering vectors.\n\nHowever, existing literature focuses almost exclusively on autoregressive text models. In multimodal architectures, cross-attention bridges inject dense continuous visual tokens into discrete token streams, altering the geometry of superposition."
+    },
+    {
+      "id": "chap-3",
+      "orderIndex": 3,
+      "title": "3. Methodology: Cross-Modal Sparse Autoencoders",
+      "targetWords": 2000,
+      "status": "Drafting",
+      "updatedAt": "2026-11-17T21:10:00Z",
+      "content": "We train paired Top-K sparse autoencoders (expansion factor 16x, k = 64) on residual stream activations extracted at layers L = {8, 14, 20}. To measure modality invariance, we introduce the Cross-Modal Alignment Index (CMAI), defined as the cosine similarity between sparse latent activation vectors induced by paired image-caption stimuli.\n\nCausal validation is performed via targeted latent ablation and activation patching on controlled visual-spatial reasoning benchmarks."
+    },
+    {
+      "id": "chap-4",
+      "orderIndex": 4,
+      "title": "4. Experimental Results & Causal Ablations",
+      "targetWords": 1600,
+      "status": "Drafting",
+      "updatedAt": "2026-11-17T22:00:00Z",
+      "content": "Preliminary evaluations on Layer 14 reveal that 31.4% of active Top-K latents respond symmetrically to both diagrammatic visual queries and formal symbolic descriptions. Suppressing top spatial-relation latents reduces geometric reasoning accuracy by 24.8 percentage points while leaving pure lexical retrieval intact (delta < 0.7%)."
+    }
+  ],
+  "sessions": [
+    {
+      "id": "sess-1",
+      "courseId": "cs-482",
+      "durationMinutes": 90,
+      "focusTopic": "Layer 14 SAE dictionary evaluation script",
+      "completedAt": "2026-11-17T21:30:00Z"
+    },
+    {
+      "id": "sess-2",
+      "courseId": "phys-410",
+      "durationMinutes": 60,
+      "focusTopic": "Rotated surface code boundary operators",
+      "completedAt": "2026-11-16T17:15:00Z"
+    },
+    {
+      "id": "sess-3",
+      "courseId": "stat-390",
+      "durationMinutes": 50,
+      "focusTopic": "Wishart eigenvalue concentration proof",
+      "completedAt": "2026-11-15T11:00:00Z"
+    },
+    {
+      "id": "sess-4",
+      "courseId": "cs-482",
+      "durationMinutes": 75,
+      "focusTopic": "Thesis Chapter 3 methodology drafting",
+      "completedAt": "2026-11-14T20:00:00Z"
+    }
+  ]
+}
