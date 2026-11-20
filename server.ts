@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
   addFlashcards,
@@ -8,12 +9,17 @@ import {
   createCourse,
   createOrUpdateNote,
   createOrUpdateTask,
+  deleteCourse,
+  deleteFlashcard,
   deleteNote,
   deleteTask,
+  getSupabaseStatus,
   getWorkspaceSnapshot,
   recordStudySession,
+  seedSupabaseFromSnapshot,
   toggleSyllabusModule,
   updateFlashcardMastery,
+  updateSupabaseConfig,
   updateThesisChapter,
 } from './src/server/store.ts';
 import type {
@@ -25,8 +31,6 @@ import type {
   SyllabusModule,
   ThesisChapter,
 } from './src/types.ts';
-
-dotenv.config();
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -45,6 +49,53 @@ function getAiClient(): GoogleGenAI {
     },
   });
 }
+
+// Supabase Integration & Diagnostics API
+app.get('/api/supabase/status', async (_req, res) => {
+  try {
+    const status = await getSupabaseStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to check Supabase status' });
+  }
+});
+
+app.post('/api/supabase/config', async (req, res) => {
+  try {
+    const { url, anonKey, serviceRoleKey } = req.body as {
+      url?: string;
+      anonKey?: string;
+      serviceRoleKey?: string;
+    };
+    const status = await updateSupabaseConfig({ url, anonKey, serviceRoleKey });
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to update Supabase configuration' });
+  }
+});
+
+app.get('/api/supabase/schema', async (_req, res) => {
+  try {
+    const schemaPath = path.resolve(process.cwd(), 'supabase', 'schema.sql');
+    if (fs.existsSync(schemaPath)) {
+      const sql = fs.readFileSync(schemaPath, 'utf8');
+      res.json({ sql });
+    } else {
+      res.status(404).json({ error: 'schema.sql not found' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to load schema' });
+  }
+});
+
+app.post('/api/supabase/seed', async (_req, res) => {
+  try {
+    const result = await seedSupabaseFromSnapshot();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to seed Supabase database' });
+  }
+});
 
 // Workspace Data API
 app.get('/api/workspace', async (_req, res) => {
@@ -82,6 +133,15 @@ app.post('/api/courses', async (req, res) => {
     res.status(201).json(created);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to create course' });
+  }
+});
+
+app.delete('/api/courses/:id', async (req, res) => {
+  try {
+    await deleteCourse(req.params.id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to delete course' });
   }
 });
 
@@ -186,6 +246,15 @@ app.patch('/api/flashcards/:id', async (req, res) => {
     res.json(updated);
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to update flashcard' });
+  }
+});
+
+app.delete('/api/flashcards/:id', async (req, res) => {
+  try {
+    await deleteFlashcard(req.params.id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to delete flashcard' });
   }
 });
 
@@ -422,8 +491,20 @@ async function startServer() {
     });
   }
 
-  app.listen(port, '0.0.0.0', () => {
+  app.listen(port, '0.0.0.0', async () => {
     console.log(`EduSphere AI server running on http://0.0.0.0:${port}`);
+    try {
+      const supaStatus = await getSupabaseStatus();
+      if (supaStatus.connected) {
+        console.log(`[Supabase] Live PostgreSQL database connected (${supaStatus.url})`);
+      } else if (supaStatus.configured) {
+        console.warn(`[Supabase] Configured but connection failed: ${supaStatus.error}`);
+      } else {
+        console.log('[Supabase] Not configured in .env. Using local storage (.data/edusphere-db.json).');
+      }
+    } catch {
+      // ignore
+    }
   });
 }
 

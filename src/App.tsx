@@ -10,7 +10,8 @@ import { PlannerView } from './components/PlannerView';
 import { Sidebar, type NavView } from './components/Sidebar';
 import { ThesisView } from './components/ThesisView';
 import { TopBar } from './components/TopBar';
-import { api } from './lib/api';
+import { SupabaseModal } from './components/SupabaseModal';
+import { api, type SupabaseStatus } from './lib/api';
 import type {
   Course,
   Flashcard,
@@ -23,6 +24,7 @@ import type {
 
 export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceSnapshot | null>(null);
+  const [supabaseStatus, setSupabaseStatus] = useState<SupabaseStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeView, setActiveView] = useState<NavView>('overview');
@@ -30,13 +32,18 @@ export default function App() {
   const [copilotNoteContext, setCopilotNoteContext] = useState<ResearchNote | undefined>(undefined);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
 
   async function loadWorkspace() {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getWorkspace();
+      const [data, sStatus] = await Promise.all([
+        api.getWorkspace(),
+        api.getSupabaseStatus().catch(() => null),
+      ]);
       setWorkspace(data);
+      if (sStatus) setSupabaseStatus(sStatus);
     } catch (err: any) {
       setError(err.message || 'Unable to load EduSphere AI workspace.');
     } finally {
@@ -282,18 +289,21 @@ export default function App() {
         scholar={workspace.scholar}
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
+        onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar
           activeView={activeView}
           subTitle={activeCourseSubtitle}
+          supabaseStatus={supabaseStatus}
           onOpenMobileNav={() => setMobileOpen(true)}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenCopilot={() => {
             setCopilotNoteContext(undefined);
             setActiveView('copilot');
           }}
+          onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
         />
 
         <main className="flex-1 w-full max-w-[1360px] mx-auto px-4 sm:px-8 py-6 sm:py-8">
@@ -384,6 +394,18 @@ export default function App() {
         onClose={() => setCommandOpen(false)}
         workspace={workspace}
         onNavigate={navigateTo}
+      />
+
+      <SupabaseModal
+        isOpen={supabaseModalOpen}
+        onClose={() => setSupabaseModalOpen(false)}
+        status={supabaseStatus}
+        onStatusUpdated={(s) => {
+          setSupabaseStatus(s);
+          if (s.connected) {
+            loadWorkspace();
+          }
+        }}
       />
     </div>
   );

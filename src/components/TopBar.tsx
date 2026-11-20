@@ -1,5 +1,6 @@
-import { Menu, Search, Sparkles } from 'lucide-react';
+import { Database, Menu, Search, Sparkles } from 'lucide-react';
 import type { NavView } from './Sidebar';
+import type { SupabaseStatus } from '../lib/api';
 
 const VIEW_TITLES: Record<NavView, string> = {
   overview: 'Academic Overview',
@@ -15,20 +16,24 @@ const VIEW_TITLES: Record<NavView, string> = {
 interface TopBarProps {
   activeView: NavView;
   subTitle?: string;
+  supabaseStatus?: SupabaseStatus | null;
   onOpenMobileNav: () => void;
   onOpenCommand: () => void;
   onOpenCopilot: () => void;
+  onOpenSupabaseModal?: () => void;
 }
 
 export function TopBar({
   activeView,
   subTitle,
+  supabaseStatus,
   onOpenMobileNav,
   onOpenCommand,
   onOpenCopilot,
+  onOpenSupabaseModal,
 }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-30 h-16 bg-[#0b0f19]/85 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-8 flex items-center justify-between gap-8">
+    <header className="sticky top-0 z-30 h-16 bg-[#0b0f19]/85 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-8 flex items-center justify-between gap-6">
       {/* Zone 1: Breadcrumb / Section Title */}
       <div className="flex items-center gap-3 min-w-0">
         <button
@@ -75,8 +80,41 @@ export function TopBar({
         </kbd>
       </button>
 
-      {/* Zone 3: Single Primary Action */}
-      <div className="flex items-center gap-2 shrink-0">
+      {/* Zone 3: Status Badge & Primary Action */}
+      <div className="flex items-center gap-3 shrink-0">
+        {/* Supabase Status Pill / Setup Trigger */}
+        {supabaseStatus?.connected ? (
+          <button
+            type="button"
+            onClick={onOpenSupabaseModal}
+            className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-xs text-emerald-300 shrink-0 transition-colors cursor-pointer"
+            title={`Connected to Supabase PostgreSQL at ${supabaseStatus.url}. Click to view details.`}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <Database className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span className="font-medium">Supabase Live</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenSupabaseModal}
+            className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs text-slate-400 hover:text-slate-200 shrink-0 transition-colors cursor-pointer"
+            title={
+              supabaseStatus?.configured
+                ? `Supabase needs configuration: ${supabaseStatus.error || 'Click to configure API key'}`
+                : 'Running on local file storage. Click to connect Supabase.'
+            }
+          >
+            <span
+              className={`h-2 w-2 rounded-full shrink-0 ${
+                supabaseStatus?.configured ? 'bg-amber-400' : 'bg-slate-500'
+              }`}
+            />
+            <Database className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span>{supabaseStatus?.configured ? 'Configure Supabase' : 'Connect Supabase'}</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onOpenCommand}

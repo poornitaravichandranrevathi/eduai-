@@ -1,6 +1,7 @@
 import {
   BookOpen,
   CalendarClock,
+  Database,
   FileText,
   GraduationCap,
   Layers,
@@ -33,6 +34,7 @@ interface SidebarProps {
   };
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  onOpenSupabaseModal?: () => void;
 }
 
 const NAV_GROUPS: Array<{
@@ -65,6 +67,7 @@ export function Sidebar({
   scholar,
   mobileOpen,
   onCloseMobile,
+  onOpenSupabaseModal,
 }: SidebarProps) {
   const [imgError, setImgError] = useState(false);
 
@@ -134,6 +137,23 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+
+      <div className="p-3 border-t border-white/[0.06]">
+        <button
+          type="button"
+          onClick={() => {
+            onOpenSupabaseModal?.();
+            onCloseMobile();
+          }}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors border border-white/5 cursor-pointer"
+        >
+          <span className="flex items-center gap-2">
+            <Database className="h-3.5 w-3.5 text-[#3ecf8e]" />
+            <span>Supabase Database</span>
+          </span>
+          <span className="text-[10px] text-slate-400 bg-white/[0.06] px-1.5 py-0.5 rounded">Setup</span>
+        </button>
+      </div>
 
       <div className="p-4 border-t border-white/[0.06]">
         <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">

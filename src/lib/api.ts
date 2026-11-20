@@ -21,13 +21,43 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export interface SupabaseStatus {
+  configured: boolean;
+  connected: boolean;
+  url?: string;
+  authMode?: 'service_role' | 'anon' | 'none';
+  tables?: Record<string, number>;
+  error?: string | null;
+}
+
 export const api = {
   getWorkspace: () => request<WorkspaceSnapshot>('/api/workspace'),
+
+  getSupabaseStatus: () => request<SupabaseStatus>('/api/supabase/status'),
+
+  getSupabaseSchema: () => request<{ sql: string }>('/api/supabase/schema'),
+
+  updateSupabaseConfig: (payload: { url?: string; anonKey?: string; serviceRoleKey?: string }) =>
+    request<SupabaseStatus>('/api/supabase/config', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  seedSupabase: () =>
+    request<{ success: boolean; seeded: Record<string, number>; message: string }>(
+      '/api/supabase/seed',
+      { method: 'POST' }
+    ),
 
   createCourse: (payload: Partial<Course>) =>
     request<Course>('/api/courses', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+
+  deleteCourse: (id: string) =>
+    request<{ ok: boolean }>(`/api/courses/${id}`, {
+      method: 'DELETE',
     }),
 
   toggleModule: (courseId: string, moduleId: string, completed: boolean) =>
@@ -63,6 +93,11 @@ export const api = {
     request<Flashcard>(`/api/flashcards/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ mastery }),
+    }),
+
+  deleteFlashcard: (id: string) =>
+    request<{ ok: boolean }>(`/api/flashcards/${id}`, {
+      method: 'DELETE',
     }),
 
   saveTask: (payload: Partial<StudyTask>) =>

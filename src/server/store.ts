@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type {
   Course,
@@ -12,19 +13,396 @@ import type {
   WorkspaceSnapshot,
 } from '../types.ts';
 
+// Ensure environment variables from .env are loaded
+dotenv.config();
+
 const DATA_DIR = path.resolve(process.cwd(), '.data');
 const DB_FILE = path.join(DATA_DIR, 'edusphere-db.json');
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY;
+let cachedClient: SupabaseClient | null = null;
+let cachedKey = '';
 
-const supabase: SupabaseClient | null =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+function isPlaceholder(val?: string): boolean {
+  if (!val) return true;
+  const v = val.trim();
+  return (
+    v === '' ||
+    v === 'your-anon-key' ||
+    v === 'your-service-role-key' ||
+    v === 'MY_SUPABASE_ANON_KEY' ||
+    v === 'MY_SUPABASE_SERVICE_ROLE_KEY' ||
+    v.includes('your-anon-key') ||
+    v.includes('your-service-role-key')
+  );
+}
 
-function createSeedData(): WorkspaceSnapshot {
+function isPlaceholderUrl(val?: string): boolean {
+  if (!val) return true;
+  const v = val.trim();
+  return (
+    v === '' ||
+    v === 'MY_APP_URL' ||
+    v.includes('your-project-ref')
+  );
+}
+
+function cleanSupabaseUrl(url?: string): string {
+  if (!url) return '';
+  return url.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+}
+
+/**
+ * Dynamically resolves and caches the Supabase client based on environment variables.
+ */
+export function getSupabase(): SupabaseClient | null {
+  dotenv.config({ override: true });
+  const rawUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseUrl = cleanSupabaseUrl(rawUrl);
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (isPlaceholderUrl(supabaseUrl)) return null;
+
+  const validKey = !isPlaceholder(serviceKey)
+    ? serviceKey
+    : !isPlaceholder(anonKey)
+    ? anonKey
+    : null;
+
+  if (!supabaseUrl || !validKey) {
+    return null;
+  }
+
+  const cacheKey = `${supabaseUrl}:${validKey}`;
+  if (cachedClient && cachedKey === cacheKey) {
+    return cachedClient;
+  }
+
+  try {
+    cachedClient = createClient(supabaseUrl, validKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+    cachedKey = cacheKey;
+    return cachedClient;
+  } catch (err) {
+    console.error('[Supabase] Client initialization error:', err);
+    return null;
+  }
+}
+
+export interface SupabaseStatus {
+  configured: boolean;
+  connected: boolean;
+  url?: string;
+  authMode?: 'service_role' | 'anon' | 'none';
+  tables?: Record<string, number>;
+  error?: string | null;
+}
+
+/**
+ * Tests connection to Supabase and returns table record counts or errors.
+ */
+export async function getSupabaseStatus(): Promise<SupabaseStatus> {
+  dotenv.config({ override: true });
+  const rawUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const supabaseUrl = cleanSupabaseUrl(rawUrl);
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const anonKey = (process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '').trim();
+
+  const hasUrl = !isPlaceholderUrl(supabaseUrl);
+  const hasServiceKey = !isPlaceholder(serviceKey);
+  const hasAnonKey = !isPlaceholder(anonKey);
+
+  if (!hasUrl && !hasServiceKey && !hasAnonKey) {
+    return {
+      configured: false,
+      connected: false,
+      error: 'Supabase credentials are not set in .env. Enter your Project URL and Anon/Service-Role API key.',
+    };
+  }
+
+  if (hasUrl && !hasServiceKey && !hasAnonKey) {
+    return {
+      configured: false,
+      connected: false,
+      url: supabaseUrl,
+      error: 'Supabase Project URL is set, but API Key is missing or still set to placeholder ("your-anon-key"). Please paste your Anon Key or Service Role Key from Project Settings > API.',
+    };
+  }
+
+  const client = getSupabase();
+  if (!client) {
+    return {
+      configured: true,
+      connected: false,
+      url: supabaseUrl,
+      error: 'Failed to initialize Supabase client instance. Check that URL and Key are formatted correctly.',
+    };
+  }
+
+  try {
+    const [c, m, n, f, t, ch, s, sc] = await Promise.all([
+      client.from('courses').select('id', { count: 'exact', head: true }),
+      client.from('syllabus_modules').select('id', { count: 'exact', head: true }),
+      client.from('research_notes').select('id', { count: 'exact', head: true }),
+      client.from('flashcards').select('id', { count: 'exact', head: true }),
+      client.from('study_tasks').select('id', { count: 'exact', head: true }),
+      client.from('thesis_chapters').select('id', { count: 'exact', head: true }),
+      client.from('study_sessions').select('id', { count: 'exact', head: true }),
+      client.from('scholar_profiles').select('id', { count: 'exact', head: true }),
+    ]);
+
+    const error =
+      c.error || m.error || n.error || f.error || t.error || ch.error || s.error;
+
+    if (error) {
+      const errMsg = error.message || error.hint || error.details || 'Permission denied or table missing';
+      const hint = error.hint ? ` Hint: ${error.hint}` : '';
+      return {
+        configured: true,
+        connected: false,
+        url: supabaseUrl,
+        authMode: hasServiceKey ? 'service_role' : 'anon',
+        error: `Supabase error (${error.code || '42501'}): ${errMsg}.${hint} Please run the GRANT statements at the end of supabase/schema.sql in the Supabase SQL Editor.`,
+      };
+    }
+
+    return {
+      configured: true,
+      connected: true,
+      url: supabaseUrl,
+      authMode: hasServiceKey ? 'service_role' : 'anon',
+      tables: {
+        courses: c.count ?? 0,
+        syllabus_modules: m.count ?? 0,
+        research_notes: n.count ?? 0,
+        flashcards: f.count ?? 0,
+        study_tasks: t.count ?? 0,
+        thesis_chapters: ch.count ?? 0,
+        study_sessions: s.count ?? 0,
+        scholar_profiles: sc.count ?? 0,
+      },
+      error: null,
+    };
+  } catch (err: any) {
+    return {
+      configured: true,
+      connected: false,
+      url: supabaseUrl,
+      error: err?.message || 'Network error reaching Supabase',
+    };
+  }
+}
+
+/**
+ * Updates Supabase configuration in .env and memory, and returns fresh status.
+ */
+export async function updateSupabaseConfig(config: {
+  url?: string;
+  anonKey?: string;
+  serviceRoleKey?: string;
+}): Promise<SupabaseStatus> {
+  const envPath = path.resolve(process.cwd(), '.env');
+  let content = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+
+  const updateOrAppend = (key: string, value: string) => {
+    const regex = new RegExp(`^${key}=.*$`, 'm');
+    if (regex.test(content)) {
+      content = content.replace(regex, `${key}="${value}"`);
+    } else {
+      content += `\n${key}="${value}"`;
+    }
+    process.env[key] = value;
+  };
+
+  if (config.url) {
+    updateOrAppend('SUPABASE_URL', config.url.trim());
+    updateOrAppend('VITE_SUPABASE_URL', config.url.trim());
+  }
+  if (config.anonKey) {
+    updateOrAppend('SUPABASE_ANON_KEY', config.anonKey.trim());
+    updateOrAppend('VITE_SUPABASE_ANON_KEY', config.anonKey.trim());
+  }
+  if (config.serviceRoleKey) {
+    updateOrAppend('SUPABASE_SERVICE_ROLE_KEY', config.serviceRoleKey.trim());
+  }
+
+  fs.writeFileSync(envPath, content, 'utf8');
+
+  cachedClient = null;
+  cachedKey = '';
+
+  return await getSupabaseStatus();
+}
+
+/**
+ * Seeds or syncs all workspace data to Supabase PostgreSQL.
+ */
+export async function seedSupabaseFromSnapshot(
+  snapshot?: WorkspaceSnapshot
+): Promise<{ success: boolean; seeded: Record<string, number>; message: string }> {
+  const client = getSupabase();
+  if (!client) {
+    throw new Error('Supabase is not configured. Provide SUPABASE_URL and SUPABASE_ANON_KEY in .env');
+  }
+
+  const data = snapshot || readLocalDb();
+  const counts: Record<string, number> = {};
+
+  // 1. Scholar profile
+  const { error: scErr } = await client.from('scholar_profiles').upsert(
+    {
+      id: 'default',
+      name: data.scholar.name,
+      program: data.scholar.program,
+      institution: data.scholar.institution,
+      term: data.scholar.term,
+      gpa: data.scholar.gpa,
+      avatar_url: data.scholar.avatarUrl,
+      thesis_title: data.scholar.thesisTitle,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' }
+  );
+  if (scErr) console.warn('[Supabase Seed] scholar_profiles upsert note:', scErr.message);
+  counts.scholar_profiles = 1;
+
+  // 2. Courses
+  if (data.courses.length > 0) {
+    const coursePayload = data.courses.map((c) => ({
+      id: c.id,
+      code: c.code,
+      title: c.title,
+      instructor: c.instructor,
+      credits: c.credits,
+      term: c.term,
+      status: c.status,
+      grade: c.grade,
+      current_score: c.currentScore,
+      weekly_hours_target: c.weeklyHoursTarget,
+      image_url: c.imageUrl,
+      description: c.description,
+    }));
+    const { error: cErr } = await client.from('courses').upsert(coursePayload, { onConflict: 'id' });
+    if (cErr) throw new Error(`Failed to seed courses: ${cErr.message}`);
+    counts.courses = coursePayload.length;
+
+    // 3. Syllabus modules
+    const allModules: any[] = [];
+    for (const c of data.courses) {
+      for (const m of c.modules || []) {
+        allModules.push({
+          id: m.id,
+          course_id: c.id,
+          week: m.week,
+          title: m.title,
+          topic_summary: m.topicSummary,
+          completed: m.completed,
+          due_date: m.dueDate,
+        });
+      }
+    }
+    if (allModules.length > 0) {
+      const { error: mErr } = await client.from('syllabus_modules').upsert(allModules, { onConflict: 'id' });
+      if (mErr) throw new Error(`Failed to seed syllabus_modules: ${mErr.message}`);
+      counts.syllabus_modules = allModules.length;
+    }
+  }
+
+  // 4. Research Notes
+  if (data.notes.length > 0) {
+    const notesPayload = data.notes.map((n) => ({
+      id: n.id,
+      course_id: n.courseId,
+      title: n.title,
+      authors: n.authors,
+      year: n.year,
+      publication: n.publication,
+      citation_key: n.citationKey,
+      summary: n.summary,
+      body: n.body,
+      tags: n.tags,
+      updated_at: n.updatedAt,
+    }));
+    const { error: nErr } = await client.from('research_notes').upsert(notesPayload, { onConflict: 'id' });
+    if (nErr) throw new Error(`Failed to seed research_notes: ${nErr.message}`);
+    counts.research_notes = notesPayload.length;
+  }
+
+  // 5. Flashcards
+  if (data.flashcards.length > 0) {
+    const cardsPayload = data.flashcards.map((f) => ({
+      id: f.id,
+      course_id: f.courseId,
+      front: f.front,
+      back: f.back,
+      hint: f.hint,
+      mastery: f.mastery,
+      last_reviewed_at: f.lastReviewedAt,
+    }));
+    const { error: fErr } = await client.from('flashcards').upsert(cardsPayload, { onConflict: 'id' });
+    if (fErr) throw new Error(`Failed to seed flashcards: ${fErr.message}`);
+    counts.flashcards = cardsPayload.length;
+  }
+
+  // 6. Study tasks
+  if (data.tasks.length > 0) {
+    const tasksPayload = data.tasks.map((t) => ({
+      id: t.id,
+      course_id: t.courseId,
+      title: t.title,
+      type: t.type,
+      due_date: t.dueDate,
+      estimated_minutes: t.estimatedMinutes,
+      priority: t.priority,
+      status: t.status,
+    }));
+    const { error: tErr } = await client.from('study_tasks').upsert(tasksPayload, { onConflict: 'id' });
+    if (tErr) throw new Error(`Failed to seed study_tasks: ${tErr.message}`);
+    counts.study_tasks = tasksPayload.length;
+  }
+
+  // 7. Thesis chapters
+  if (data.thesisChapters.length > 0) {
+    const chaptersPayload = data.thesisChapters.map((ch) => ({
+      id: ch.id,
+      order_index: ch.orderIndex,
+      title: ch.title,
+      target_words: ch.targetWords,
+      content: ch.content,
+      status: ch.status,
+      updated_at: ch.updatedAt,
+    }));
+    const { error: chErr } = await client.from('thesis_chapters').upsert(chaptersPayload, { onConflict: 'id' });
+    if (chErr) throw new Error(`Failed to seed thesis_chapters: ${chErr.message}`);
+    counts.thesis_chapters = chaptersPayload.length;
+  }
+
+  // 8. Study sessions
+  if (data.sessions.length > 0) {
+    const sessionsPayload = data.sessions.map((s) => ({
+      id: s.id,
+      course_id: s.courseId,
+      duration_minutes: s.durationMinutes,
+      focus_topic: s.focusTopic,
+      completed_at: s.completedAt,
+    }));
+    const { error: sErr } = await client.from('study_sessions').upsert(sessionsPayload, { onConflict: 'id' });
+    if (sErr) throw new Error(`Failed to seed study_sessions: ${sErr.message}`);
+    counts.study_sessions = sessionsPayload.length;
+  }
+
+  return {
+    success: true,
+    seeded: counts,
+    message: 'Supabase successfully seeded from workspace data.',
+  };
+}
+
+export function createSeedData(): WorkspaceSnapshot {
   return {
     scholar: {
       name: 'Elena Rostova',
@@ -453,7 +831,7 @@ function createSeedData(): WorkspaceSnapshot {
   };
 }
 
-function readLocalDb(): WorkspaceSnapshot {
+export function readLocalDb(): WorkspaceSnapshot {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
@@ -472,15 +850,21 @@ function readLocalDb(): WorkspaceSnapshot {
   }
 }
 
-function writeLocalDb(data: WorkspaceSnapshot): void {
+export function writeLocalDb(data: WorkspaceSnapshot): void {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/**
+ * Fetches the entire workspace snapshot from Supabase PostgreSQL tables.
+ * If connected with empty tables, automatically seeds Supabase from local database.
+ */
 async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
-  if (!supabase) return null;
+  const client = getSupabase();
+  if (!client) return null;
+
   try {
     const [
       { data: coursesData, error: cErr },
@@ -490,21 +874,58 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
       { data: tasksData, error: tErr },
       { data: chaptersData, error: chErr },
       { data: sessionsData, error: sErr },
+      { data: scholarData },
     ] = await Promise.all([
-      supabase.from('courses').select('*'),
-      supabase.from('syllabus_modules').select('*').order('week', { ascending: true }),
-      supabase.from('research_notes').select('*').order('updated_at', { ascending: false }),
-      supabase.from('flashcards').select('*'),
-      supabase.from('study_tasks').select('*').order('due_date', { ascending: true }),
-      supabase.from('thesis_chapters').select('*').order('order_index', { ascending: true }),
-      supabase.from('study_sessions').select('*').order('completed_at', { ascending: false }),
+      client.from('courses').select('*'),
+      client.from('syllabus_modules').select('*').order('week', { ascending: true }),
+      client.from('research_notes').select('*').order('updated_at', { ascending: false }),
+      client.from('flashcards').select('*'),
+      client.from('study_tasks').select('*').order('due_date', { ascending: true }),
+      client.from('thesis_chapters').select('*').order('order_index', { ascending: true }),
+      client.from('study_sessions').select('*').order('completed_at', { ascending: false }),
+      client.from('scholar_profiles').select('*').limit(1).maybeSingle(),
     ]);
 
-    if (cErr || mErr || nErr || fErr || tErr || chErr || sErr || !coursesData?.length) {
+    if (cErr || mErr || nErr || fErr || tErr || chErr || sErr) {
+      console.warn(
+        '[Supabase] Query warning:',
+        cErr?.message ||
+          mErr?.message ||
+          nErr?.message ||
+          fErr?.message ||
+          tErr?.message ||
+          chErr?.message ||
+          sErr?.message
+      );
       return null;
     }
 
-    const seed = createSeedData();
+    // Auto-seed if tables exist but no courses are recorded yet
+    if (!coursesData || coursesData.length === 0) {
+      console.log('[Supabase] Connected to Supabase with empty tables. Auto-seeding initial workspace...');
+      try {
+        const local = readLocalDb();
+        await seedSupabaseFromSnapshot(local);
+        return local;
+      } catch (seedErr: any) {
+        console.error('[Supabase] Auto-seed failed:', seedErr?.message);
+        return null;
+      }
+    }
+
+    const defaultScholar = createSeedData().scholar;
+    const scholar = scholarData
+      ? {
+          name: scholarData.name || defaultScholar.name,
+          program: scholarData.program || defaultScholar.program,
+          institution: scholarData.institution || defaultScholar.institution,
+          term: scholarData.term || defaultScholar.term,
+          gpa: Number(scholarData.gpa ?? defaultScholar.gpa),
+          avatarUrl: scholarData.avatar_url || defaultScholar.avatarUrl,
+          thesisTitle: scholarData.thesis_title || defaultScholar.thesisTitle,
+        }
+      : defaultScholar;
+
     const modulesByCourse = new Map<string, SyllabusModule[]>();
     for (const m of modulesData ?? []) {
       const list = modulesByCourse.get(m.course_id) ?? [];
@@ -537,7 +958,7 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
     }));
 
     return {
-      scholar: seed.scholar,
+      scholar,
       courses,
       notes: (notesData ?? []).map((n) => ({
         id: n.id,
@@ -588,7 +1009,8 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
         completedAt: s.completed_at,
       })),
     };
-  } catch {
+  } catch (err: any) {
+    console.error('[Supabase] Unexpected error fetching workspace:', err);
     return null;
   }
 }
@@ -604,8 +1026,9 @@ export async function createCourse(course: Course): Promise<Course> {
   db.courses.unshift(course);
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('courses').insert({
+  const client = getSupabase();
+  if (client) {
+    const { error: cErr } = await client.from('courses').insert({
       id: course.id,
       code: course.code,
       title: course.title,
@@ -619,8 +1042,39 @@ export async function createCourse(course: Course): Promise<Course> {
       image_url: course.imageUrl,
       description: course.description,
     });
+    if (cErr) {
+      console.error('[Supabase] Failed to insert course:', cErr.message);
+    } else if (course.modules && course.modules.length > 0) {
+      const moduleInserts = course.modules.map((m) => ({
+        id: m.id,
+        course_id: course.id,
+        week: m.week,
+        title: m.title,
+        topic_summary: m.topicSummary,
+        completed: m.completed,
+        due_date: m.dueDate,
+      }));
+      const { error: mErr } = await client.from('syllabus_modules').insert(moduleInserts);
+      if (mErr) console.error('[Supabase] Failed to insert initial modules:', mErr.message);
+    }
   }
   return course;
+}
+
+export async function deleteCourse(courseId: string): Promise<void> {
+  const db = readLocalDb();
+  db.courses = db.courses.filter((c) => c.id !== courseId);
+  db.notes = db.notes.filter((n) => n.courseId !== courseId);
+  db.flashcards = db.flashcards.filter((f) => f.courseId !== courseId);
+  db.tasks = db.tasks.filter((t) => t.courseId !== courseId);
+  db.sessions = db.sessions.filter((s) => s.courseId !== courseId);
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('courses').delete().eq('id', courseId);
+    if (error) console.error('[Supabase] Failed to delete course:', error.message);
+  }
 }
 
 export async function toggleSyllabusModule(
@@ -636,8 +1090,13 @@ export async function toggleSyllabusModule(
   mod.completed = completed;
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('syllabus_modules').update({ completed }).eq('id', moduleId);
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client
+      .from('syllabus_modules')
+      .update({ completed })
+      .eq('id', moduleId);
+    if (error) console.error('[Supabase] Failed to update module status:', error.message);
   }
   return mod;
 }
@@ -650,8 +1109,9 @@ export async function addSyllabusModule(mod: SyllabusModule): Promise<SyllabusMo
   course.modules.sort((a, b) => a.week - b.week);
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('syllabus_modules').insert({
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('syllabus_modules').insert({
       id: mod.id,
       course_id: mod.courseId,
       week: mod.week,
@@ -660,6 +1120,7 @@ export async function addSyllabusModule(mod: SyllabusModule): Promise<SyllabusMo
       completed: mod.completed,
       due_date: mod.dueDate,
     });
+    if (error) console.error('[Supabase] Failed to add syllabus module:', error.message);
   }
   return mod;
 }
@@ -674,8 +1135,9 @@ export async function createOrUpdateNote(note: ResearchNote): Promise<ResearchNo
   }
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('research_notes').upsert({
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('research_notes').upsert({
       id: note.id,
       course_id: note.courseId,
       title: note.title,
@@ -688,6 +1150,7 @@ export async function createOrUpdateNote(note: ResearchNote): Promise<ResearchNo
       tags: note.tags,
       updated_at: note.updatedAt,
     });
+    if (error) console.error('[Supabase] Failed to upsert note:', error.message);
   }
   return note;
 }
@@ -697,8 +1160,10 @@ export async function deleteNote(noteId: string): Promise<void> {
   db.notes = db.notes.filter((n) => n.id !== noteId);
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('research_notes').delete().eq('id', noteId);
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('research_notes').delete().eq('id', noteId);
+    if (error) console.error('[Supabase] Failed to delete note:', error.message);
   }
 }
 
@@ -707,8 +1172,9 @@ export async function addFlashcards(cards: Flashcard[]): Promise<Flashcard[]> {
   db.flashcards.unshift(...cards);
   writeLocalDb(db);
 
-  if (supabase && cards.length > 0) {
-    await supabase.from('flashcards').insert(
+  const client = getSupabase();
+  if (client && cards.length > 0) {
+    const { error } = await client.from('flashcards').insert(
       cards.map((c) => ({
         id: c.id,
         course_id: c.courseId,
@@ -719,8 +1185,21 @@ export async function addFlashcards(cards: Flashcard[]): Promise<Flashcard[]> {
         last_reviewed_at: c.lastReviewedAt,
       }))
     );
+    if (error) console.error('[Supabase] Failed to insert flashcards:', error.message);
   }
   return cards;
+}
+
+export async function deleteFlashcard(cardId: string): Promise<void> {
+  const db = readLocalDb();
+  db.flashcards = db.flashcards.filter((f) => f.id !== cardId);
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('flashcards').delete().eq('id', cardId);
+    if (error) console.error('[Supabase] Failed to delete flashcard:', error.message);
+  }
 }
 
 export async function updateFlashcardMastery(
@@ -734,11 +1213,13 @@ export async function updateFlashcardMastery(
   card.lastReviewedAt = new Date().toISOString();
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client
       .from('flashcards')
       .update({ mastery, last_reviewed_at: card.lastReviewedAt })
       .eq('id', cardId);
+    if (error) console.error('[Supabase] Failed to update flashcard mastery:', error.message);
   }
   return card;
 }
@@ -753,8 +1234,9 @@ export async function createOrUpdateTask(task: StudyTask): Promise<StudyTask> {
   }
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('study_tasks').upsert({
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('study_tasks').upsert({
       id: task.id,
       course_id: task.courseId,
       title: task.title,
@@ -764,6 +1246,7 @@ export async function createOrUpdateTask(task: StudyTask): Promise<StudyTask> {
       priority: task.priority,
       status: task.status,
     });
+    if (error) console.error('[Supabase] Failed to upsert study task:', error.message);
   }
   return task;
 }
@@ -773,8 +1256,10 @@ export async function deleteTask(taskId: string): Promise<void> {
   db.tasks = db.tasks.filter((t) => t.id !== taskId);
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('study_tasks').delete().eq('id', taskId);
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('study_tasks').delete().eq('id', taskId);
+    if (error) console.error('[Supabase] Failed to delete study task:', error.message);
   }
 }
 
@@ -789,8 +1274,9 @@ export async function updateThesisChapter(chapter: ThesisChapter): Promise<Thesi
   }
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('thesis_chapters').upsert({
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('thesis_chapters').upsert({
       id: chapter.id,
       order_index: chapter.orderIndex,
       title: chapter.title,
@@ -799,6 +1285,7 @@ export async function updateThesisChapter(chapter: ThesisChapter): Promise<Thesi
       status: chapter.status,
       updated_at: chapter.updatedAt,
     });
+    if (error) console.error('[Supabase] Failed to upsert thesis chapter:', error.message);
   }
   return chapter;
 }
@@ -808,14 +1295,16 @@ export async function recordStudySession(session: StudySession): Promise<StudySe
   db.sessions.unshift(session);
   writeLocalDb(db);
 
-  if (supabase) {
-    await supabase.from('study_sessions').insert({
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('study_sessions').insert({
       id: session.id,
       course_id: session.courseId,
       duration_minutes: session.durationMinutes,
       focus_topic: session.focusTopic,
       completed_at: session.completedAt,
     });
+    if (error) console.error('[Supabase] Failed to insert study session:', error.message);
   }
   return session;
 }
