@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { ChatbotBuilderView } from './components/ChatbotBuilderView';
 import { CommandPalette } from './components/CommandPalette';
 import { CopilotView } from './components/CopilotView';
 import { CoursesView } from './components/CoursesView';
+import { CustomerChatWidget } from './components/CustomerChatWidget';
+import { CustomerResponseView } from './components/CustomerResponseView';
 import { FlashcardsView } from './components/FlashcardsView';
 import { FocusView } from './components/FocusView';
 import { NotesView } from './components/NotesView';
@@ -13,8 +16,13 @@ import { TopBar } from './components/TopBar';
 import { SupabaseModal } from './components/SupabaseModal';
 import { api, type SupabaseStatus } from './lib/api';
 import type {
+  ChatbotConfig,
   Course,
+  CustomerInquiry,
   Flashcard,
+  InquiryCategory,
+  InquiryPriority,
+  InquiryStatus,
   ResearchNote,
   StudyTask,
   SyllabusModule,
@@ -240,6 +248,113 @@ export default function App() {
     );
   }
 
+  async function handleCreateInquiry(payload: {
+    customerName: string;
+    customerEmail: string;
+    subject: string;
+    category: InquiryCategory;
+    priority: InquiryPriority;
+    courseId?: string;
+    message: string;
+    autoAiRespond?: boolean;
+  }) {
+    const created = await api.createInquiry(payload);
+    setWorkspace((prev) =>
+      prev ? { ...prev, inquiries: [created, ...(prev.inquiries || [])] } : prev
+    );
+  }
+
+  async function handleReplyInquiry(
+    id: string,
+    payload: {
+      sender?: 'customer' | 'support_agent';
+      senderName?: string;
+      content: string;
+      newStatus?: InquiryStatus;
+    }
+  ) {
+    const updated = await api.replyToInquiry(id, {
+      sender: payload.sender || 'support_agent',
+      senderName: payload.senderName || 'Academic Support',
+      content: payload.content,
+    });
+    if (payload.newStatus && payload.newStatus !== updated.status) {
+      await api.updateInquiryStatus(id, payload.newStatus);
+      updated.status = payload.newStatus;
+    }
+    setWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            inquiries: (prev.inquiries || []).map((i) => (i.id === updated.id ? updated : i)),
+          }
+        : prev
+    );
+  }
+
+  async function handleUpdateInquiryStatus(id: string, status: InquiryStatus) {
+    const updated = await api.updateInquiryStatus(id, status);
+    setWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            inquiries: (prev.inquiries || []).map((i) => (i.id === updated.id ? updated : i)),
+          }
+        : prev
+    );
+  }
+
+  async function handleRateInquiry(id: string, rating: number, feedback?: string) {
+    const updated = await api.rateInquiry(id, rating, feedback);
+    setWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            inquiries: (prev.inquiries || []).map((i) => (i.id === updated.id ? updated : i)),
+          }
+        : prev
+    );
+  }
+
+  async function handleDeleteInquiry(id: string) {
+    await api.deleteInquiry(id);
+    setWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            inquiries: (prev.inquiries || []).filter((i) => i.id !== id),
+          }
+        : prev
+    );
+  }
+
+  async function handleSaveChatbot(botPayload: Partial<ChatbotConfig>) {
+    const saved = await api.saveChatbot(botPayload);
+    setWorkspace((prev) => {
+      if (!prev) return prev;
+      const exists = (prev.chatbots || []).some((b) => b.id === saved.id);
+      return {
+        ...prev,
+        chatbots: exists
+          ? (prev.chatbots || []).map((b) => (b.id === saved.id ? saved : b))
+          : [saved, ...(prev.chatbots || [])],
+      };
+    });
+    return saved;
+  }
+
+  async function handleDeleteChatbot(id: string) {
+    await api.deleteChatbot(id);
+    setWorkspace((prev) =>
+      prev
+        ? {
+            ...prev,
+            chatbots: (prev.chatbots || []).filter((b) => b.id !== id),
+          }
+        : prev
+    );
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center px-4">
@@ -278,6 +393,10 @@ export default function App() {
       ? workspace.courses.find((c) => c.id === selectedCourseId)?.code
       : undefined;
 
+  const pendingInquiriesCount = (workspace.inquiries || []).filter(
+    (i) => i.status === 'pending'
+  ).length;
+
   return (
     <div className="min-h-screen bg-[#0b0f19] text-[#dfe2f1] flex">
       <Sidebar
@@ -290,6 +409,7 @@ export default function App() {
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
+        pendingInquiriesCount={pendingInquiriesCount}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">
@@ -386,6 +506,29 @@ export default function App() {
               onSaveResponseAsNote={handleSaveNote}
             />
           )}
+
+          {activeView === 'customer-response' && (
+            <CustomerResponseView
+              inquiries={workspace.inquiries || []}
+              courses={workspace.courses}
+              onCreateInquiry={handleCreateInquiry}
+              onReplyInquiry={handleReplyInquiry}
+              onUpdateStatus={handleUpdateInquiryStatus}
+              onRateInquiry={handleRateInquiry}
+              onDeleteInquiry={handleDeleteInquiry}
+              onNavigateToChatbotStudio={() => navigateTo('chatbots')}
+            />
+          )}
+
+          {activeView === 'chatbots' && (
+            <ChatbotBuilderView
+              chatbots={workspace.chatbots || []}
+              courses={workspace.courses}
+              onSaveChatbot={handleSaveChatbot}
+              onDeleteChatbot={handleDeleteChatbot}
+              onNavigateToInquiries={() => navigateTo('customer-response')}
+            />
+          )}
         </main>
       </div>
 
@@ -406,6 +549,14 @@ export default function App() {
             loadWorkspace();
           }
         }}
+      />
+
+      <CustomerChatWidget
+        chatbots={workspace.chatbots || []}
+        scholar={workspace.scholar}
+        courses={workspace.courses}
+        onCreateInquiry={handleCreateInquiry}
+        onNavigate={navigateTo}
       />
     </div>
   );

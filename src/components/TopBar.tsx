@@ -11,6 +11,8 @@ const VIEW_TITLES: Record<NavView, string> = {
   planner: 'Study Planner',
   focus: 'Focus Timer',
   copilot: 'AI Copilot',
+  'customer-response': 'Student Inquiries & Support',
+  chatbots: 'AI Chatbot Studio & Auto-Responder',
 };
 
 interface TopBarProps {

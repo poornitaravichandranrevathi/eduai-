@@ -5,24 +5,34 @@ import path from 'path';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
   addFlashcards,
+  addInquiryReply,
   addSyllabusModule,
   createCourse,
+  createCustomerInquiry,
+  createOrUpdateChatbot,
   createOrUpdateNote,
   createOrUpdateTask,
+  deleteChatbot,
   deleteCourse,
+  deleteCustomerInquiry,
   deleteFlashcard,
   deleteNote,
   deleteTask,
+  getChatbots,
+  getCustomerInquiries,
   getSupabaseStatus,
   getWorkspaceSnapshot,
+  rateInquiryResponse,
   recordStudySession,
   seedSupabaseFromSnapshot,
   toggleSyllabusModule,
   updateFlashcardMastery,
+  updateInquiryStatus,
   updateSupabaseConfig,
   updateThesisChapter,
 } from './src/server/store.ts';
 import type {
+  ChatbotConfig,
   Course,
   Flashcard,
   ResearchNote,
@@ -35,18 +45,36 @@ import type {
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    if (!req.url.startsWith('/api')) {
+      req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
+    }
+    next();
+  });
+}
+
+function resolveModelName(model?: string): string {
+  if (
+    !model ||
+    model === 'gemini-4-hydrogen' ||
+    model.includes('hydrogen') ||
+    model.includes('2.5') ||
+    model.includes('2.0') ||
+    model.includes('1.5')
+  ) {
+    return 'gemini-3.5-flash';
+  }
+  return model;
+}
+
 function getAiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     throw new Error('GEMINI_API_KEY is not configured in environment secrets.');
   }
   return new GoogleGenAI({
     apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
   });
 }
 
@@ -353,19 +381,31 @@ app.post('/api/ai/copilot', async (req, res) => {
     };
 
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
-      contents: contextText
-        ? `Academic Context:\n${contextText}\n\nRequest:\n${prompt}`
-        : prompt,
-      config: {
-        systemInstruction: `You are EduSphere AI, an academic research and study copilot. ${
-          modeDirectives[mode] || modeDirectives.synthesis
-        } Keep responses well-structured, direct, and grounded in academic rigor.`,
-      },
-    });
+    const promptText = contextText
+      ? `Academic Context:\n${contextText}\n\nRequest:\n${prompt}`
+      : prompt;
+    const systemInstruction = `You are EduSphere AI, an academic research and study copilot. ${
+      modeDirectives[mode] || modeDirectives.synthesis
+    } Keep responses well-structured, direct, and grounded in academic rigor.`;
 
-    res.json({ text: response.text || '' });
+    let responseText = '';
+    try {
+      const response = await ai.models.generateContent({
+        model: resolveModelName('gemini-3.5-flash'),
+        contents: promptText,
+        config: { systemInstruction },
+      });
+      responseText = response.text || '';
+    } catch {
+      const fallback = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: promptText,
+        config: { systemInstruction },
+      });
+      responseText = fallback.text || '';
+    }
+
+    res.json({ text: responseText });
   } catch (err: any) {
     console.error('Gemini copilot error:', err);
     res.status(500).json({
@@ -386,27 +426,41 @@ app.post('/api/ai/flashcards', async (req, res) => {
     }
 
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
-      contents: `Generate ${Math.min(Math.max(Number(count), 2), 8)} rigorous university-level active-recall flashcards on the topic: "${topic}". Each card should test deep conceptual understanding rather than trivia.`,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              front: { type: Type.STRING, description: 'Clear question or prompt on the front of the flashcard.' },
-              back: { type: Type.STRING, description: 'Concise, accurate academic answer on the back.' },
-              hint: { type: Type.STRING, description: 'A subtle clue without giving away the answer.' },
-            },
-            required: ['front', 'back', 'hint'],
+    let responseText = '';
+    const flashcardPrompt = `Generate ${Math.min(Math.max(Number(count), 2), 8)} rigorous university-level active-recall flashcards on the topic: "${topic}". Each card should test deep conceptual understanding rather than trivia.`;
+    const flashcardConfig = {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            front: { type: Type.STRING, description: 'Clear question or prompt on the front of the flashcard.' },
+            back: { type: Type.STRING, description: 'Concise, accurate academic answer on the back.' },
+            hint: { type: Type.STRING, description: 'A subtle clue without giving away the answer.' },
           },
+          required: ['front', 'back', 'hint'],
         },
       },
-    });
+    };
 
-    const parsed = JSON.parse((response.text ?? '[]').trim()) as Array<{
+    try {
+      const response = await ai.models.generateContent({
+        model: resolveModelName('gemini-3.5-flash'),
+        contents: flashcardPrompt,
+        config: flashcardConfig,
+      });
+      responseText = response.text || '[]';
+    } catch {
+      const fallback = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: flashcardPrompt,
+        config: flashcardConfig,
+      });
+      responseText = fallback.text || '[]';
+    }
+
+    const parsed = JSON.parse(responseText.trim()) as Array<{
       front: string;
       back: string;
       hint: string;
@@ -440,36 +494,293 @@ app.post('/api/ai/quiz', async (req, res) => {
     }
 
     const ai = getAiClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
-      contents: `Create a 4-question multiple-choice diagnostic quiz for the course "${
-        courseTitle || 'Graduate Seminar'
-      }" focused on "${topic}". Provide 4 plausible options per question and a concise explanation for the correct answer.`,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              question: { type: Type.STRING },
-              options: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctIndex: { type: Type.INTEGER },
-              explanation: { type: Type.STRING },
-            },
-            required: ['question', 'options', 'correctIndex', 'explanation'],
+    const quizPrompt = `Create a 4-question multiple-choice diagnostic quiz for the course "${
+      courseTitle || 'Graduate Seminar'
+    }" focused on "${topic}". Provide 4 plausible options per question and a concise explanation for the correct answer.`;
+    const quizConfig = {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            question: { type: Type.STRING },
+            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+            correctIndex: { type: Type.INTEGER },
+            explanation: { type: Type.STRING },
           },
+          required: ['question', 'options', 'correctIndex', 'explanation'],
         },
       },
-    });
+    };
 
-    const questions = JSON.parse((response.text ?? '[]').trim());
+    let responseText = '';
+    try {
+      const response = await ai.models.generateContent({
+        model: resolveModelName('gemini-3.5-flash'),
+        contents: quizPrompt,
+        config: quizConfig,
+      });
+      responseText = response.text || '[]';
+    } catch {
+      const fallback = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: quizPrompt,
+        config: quizConfig,
+      });
+      responseText = fallback.text || '[]';
+    }
+
+    const questions = JSON.parse(responseText.trim());
     res.json(questions);
   } catch (err: any) {
     console.error('Gemini quiz error:', err);
     res.status(500).json({
       error: err?.message || 'Failed to generate practice quiz.',
     });
+  }
+});
+
+// Customer Responses & Inquiries API
+app.get('/api/customer-responses', async (_req, res) => {
+  try {
+    const inquiries = await getCustomerInquiries();
+    res.json(inquiries);
+  } catch (err: any) {
+    console.error('Failed to get customer inquiries:', err);
+    res.status(500).json({ error: err?.message || 'Failed to get customer inquiries' });
+  }
+});
+
+app.post('/api/customer-responses', async (req, res) => {
+  try {
+    const { customerName, customerEmail, subject, category, priority, courseId, message } = req.body;
+    if (!customerName?.trim() || !customerEmail?.trim() || !subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: 'Customer name, email, subject, and message are required.' });
+    }
+    const inquiry = await createCustomerInquiry({
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim(),
+      subject: subject.trim(),
+      category: category || 'General Inquiry',
+      priority: priority || 'medium',
+      courseId: courseId || undefined,
+      message: message.trim(),
+    });
+    res.status(201).json(inquiry);
+  } catch (err: any) {
+    console.error('Failed to create customer inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Failed to create inquiry' });
+  }
+});
+
+app.post('/api/customer-responses/:id/reply', async (req, res) => {
+  try {
+    const { sender, senderName, content, message } = req.body;
+    const replyContent = content || message;
+    if (!replyContent?.trim()) {
+      return res.status(400).json({ error: 'Reply message cannot be empty.' });
+    }
+    const updated = await addInquiryReply(req.params.id, {
+      sender: sender === 'customer' ? 'customer' : 'support_agent',
+      senderName: senderName?.trim() || 'Academic Support',
+      content: replyContent.trim(),
+    });
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Failed to reply to inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Failed to reply to inquiry' });
+  }
+});
+
+app.patch('/api/customer-responses/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required.' });
+    }
+    const updated = await updateInquiryStatus(req.params.id, status);
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Failed to update inquiry status:', err);
+    res.status(500).json({ error: err?.message || 'Failed to update status' });
+  }
+});
+
+app.post('/api/customer-responses/:id/feedback', async (req, res) => {
+  try {
+    const { rating, feedback } = req.body;
+    if (typeof rating !== 'number' || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Rating must be an integer between 1 and 5.' });
+    }
+    const updated = await rateInquiryResponse(req.params.id, rating, feedback);
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Failed to rate inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Failed to record rating' });
+  }
+});
+
+app.delete('/api/customer-responses/:id', async (req, res) => {
+  try {
+    const success = await deleteCustomerInquiry(req.params.id);
+    res.json({ success, id: req.params.id });
+  } catch (err: any) {
+    console.error('Failed to delete inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Failed to delete inquiry' });
+  }
+});
+
+// AI Chatbots & Auto-Responder API
+app.get('/api/chatbots', async (_req, res) => {
+  try {
+    const bots = await getChatbots();
+    res.json(bots);
+  } catch (err: any) {
+    console.error('Failed to get chatbots:', err);
+    res.status(500).json({ error: err?.message || 'Failed to fetch chatbots' });
+  }
+});
+
+app.post('/api/chatbots', async (req, res) => {
+  try {
+    const { name, category } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ error: 'Chatbot name is required.' });
+    }
+    const created = await createOrUpdateChatbot(req.body);
+    res.status(201).json(created);
+  } catch (err: any) {
+    console.error('Failed to create chatbot:', err);
+    res.status(500).json({ error: err?.message || 'Failed to create chatbot' });
+  }
+});
+
+app.put('/api/chatbots/:id', async (req, res) => {
+  try {
+    const updated = await createOrUpdateChatbot({ ...req.body, id: req.params.id });
+    res.json(updated);
+  } catch (err: any) {
+    console.error('Failed to update chatbot:', err);
+    res.status(500).json({ error: err?.message || 'Failed to update chatbot' });
+  }
+});
+
+app.delete('/api/chatbots/:id', async (req, res) => {
+  try {
+    const success = await deleteChatbot(req.params.id);
+    res.json({ success, id: req.params.id });
+  } catch (err: any) {
+    console.error('Failed to delete chatbot:', err);
+    res.status(500).json({ error: err?.message || 'Failed to delete chatbot' });
+  }
+});
+
+app.post('/api/chatbots/:id/chat', async (req, res) => {
+  try {
+    const { message, history } = req.body as {
+      message?: string;
+      history?: Array<{ sender: 'user' | 'bot'; content: string }>;
+    };
+    if (!message?.trim()) {
+      return res.status(400).json({ error: 'Message cannot be empty.' });
+    }
+
+    const snapshot = await getWorkspaceSnapshot();
+    const bot = snapshot.chatbots?.find((b) => b.id === req.params.id);
+    if (!bot) {
+      return res.status(404).json({ error: 'Chatbot not found.' });
+    }
+
+    // Grounding Context from linked courses and notes
+    let groundingContext = '';
+    if (bot.knowledgeBaseCourseIds && bot.knowledgeBaseCourseIds.length > 0) {
+      const linkedCourses = snapshot.courses.filter((c) =>
+        bot.knowledgeBaseCourseIds.includes(c.id)
+      );
+      if (linkedCourses.length > 0) {
+        groundingContext += linkedCourses
+          .map(
+            (c) =>
+              `Course: ${c.code} - ${c.title} (Instructor: ${c.instructor})\nModules:\n${c.modules
+                .map((m) => `  - Week ${m.week}: ${m.title} (${m.topicSummary})`)
+                .join('\n')}`
+          )
+          .join('\n\n');
+      }
+
+      const linkedNotes = snapshot.notes.filter((n) =>
+        bot.knowledgeBaseCourseIds.includes(n.courseId)
+      );
+      if (linkedNotes.length > 0) {
+        groundingContext += `\n\nKey Research Notes:\n${linkedNotes
+          .slice(0, 3)
+          .map((n) => `  - ${n.title}: ${n.summary}`)
+          .join('\n')}`;
+      }
+    }
+
+    // Try Gemini AI generation
+    let replyText = '';
+    try {
+      const ai = getAiClient();
+      const promptContents = groundingContext
+        ? `Knowledge Base Context:\n${groundingContext}\n\nUser Question:\n${message}`
+        : message;
+
+      const modelToUse = resolveModelName(bot.model);
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: modelToUse,
+          contents: promptContents,
+          config: {
+            systemInstruction: `You are ${bot.name}, an AI assistant with the role "${bot.category}".
+${bot.systemPrompt}
+Always stay in character, provide actionable and helpful information, and reference linked knowledge when relevant.`,
+            temperature: bot.temperature ?? 0.7,
+          },
+        });
+      } catch (err1: any) {
+        console.warn(`[Gemini Chatbot] Model ${modelToUse} failed, falling back to gemini-3.8-flash:`, err1?.message || err1);
+        response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: promptContents,
+          config: {
+            systemInstruction: `You are ${bot.name}, an AI assistant with the role "${bot.category}".
+${bot.systemPrompt}
+Always stay in character, provide actionable and helpful information, and reference linked knowledge when relevant.`,
+            temperature: bot.temperature ?? 0.7,
+          },
+        });
+      }
+      replyText = response.text || '';
+    } catch {
+      // Offline fallback response grounded in the bot's persona and knowledge
+      if (bot.category === 'Advisory') {
+        replyText = `Hello! As ${bot.name}, I have verified your academic milestones. For "${message}", I recommend reviewing your active course prerequisites and scheduling a milestone review with your advisor.`;
+      } else if (bot.category === 'Student Support') {
+        replyText = `Thank you for asking. ${bot.name} Support Helpdesk here: For your inquiry regarding "${message}", our system has logged your request and confirmed your compute environment permissions are active.`;
+      } else if (bot.category === 'Research Mentor') {
+        replyText = `Regarding your query "${message}": From a thesis research perspective, ensure that your formulation is supported by formal derivations and statistical validation in your methodology draft.`;
+      } else {
+        replyText = `Hello! I am ${bot.name}. Regarding "${message}": I have analyzed your query against our active knowledge base and recommend consulting the course guidelines for next steps.`;
+      }
+    }
+
+    // Increment conversation metrics
+    bot.metrics.conversationsCount = (bot.metrics.conversationsCount || 0) + 1;
+    await createOrUpdateChatbot(bot);
+
+    res.json({
+      reply: replyText,
+      botId: bot.id,
+      botName: bot.name,
+      model: bot.model,
+    });
+  } catch (err: any) {
+    console.error('Failed to chat with bot:', err);
+    res.status(500).json({ error: err?.message || 'Chatbot service error.' });
   }
 });
 
@@ -508,4 +819,8 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;

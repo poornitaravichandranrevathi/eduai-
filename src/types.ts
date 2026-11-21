@@ -88,6 +88,83 @@ export interface CopilotMessage {
   createdAt: string;
 }
 
+export type InquiryStatus = 'pending' | 'in_progress' | 'responded' | 'resolved';
+
+export type InquiryCategory =
+  | 'Academic Advisory'
+  | 'Course Content'
+  | 'Technical Support'
+  | 'Thesis & Research'
+  | 'Billing & Account'
+  | 'General Inquiry';
+
+export type InquiryPriority = 'high' | 'medium' | 'low';
+
+export interface InquiryMessage {
+  id: string;
+  sender: 'customer' | 'support_agent' | 'ai_assistant';
+  senderName: string;
+  content: string;
+  createdAt: string;
+  isInternalNote?: boolean;
+}
+
+export interface CustomerInquiry {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  subject: string;
+  category: InquiryCategory;
+  priority: InquiryPriority;
+  status: InquiryStatus;
+  courseId?: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: InquiryMessage[];
+  aiSuggestedResponse?: string;
+  satisfactionRating?: number; // 1 to 5 stars
+  customerFeedback?: string;
+}
+
+export type ChatbotCategory =
+  | 'Advisory'
+  | 'Course Tutor'
+  | 'Student Support'
+  | 'Research Mentor'
+  | 'FAQ Bot';
+
+export interface ChatbotConfig {
+  id: string;
+  name: string;
+  description: string;
+  avatarIcon: string; // 'bot' | 'sparkles' | 'graduation-cap' | 'book-open' | 'message-square' | 'shield'
+  avatarColor: string; // 'purple' | 'emerald' | 'sky' | 'amber' | 'rose'
+  category: ChatbotCategory;
+  model: string;
+  temperature: number;
+  systemPrompt: string;
+  welcomeMessage: string;
+  suggestedPrompts: string[];
+  knowledgeBaseCourseIds: string[];
+  assignedInquiryCategories: InquiryCategory[];
+  isActive: boolean;
+  autoReplyToInquiries: boolean;
+  metrics: {
+    conversationsCount: number;
+    resolvedTicketsCount: number;
+    avgSatisfaction: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatbotMessage {
+  id: string;
+  sender: 'user' | 'bot';
+  content: string;
+  timestamp: string;
+}
+
 export interface WorkspaceSnapshot {
   scholar: {
     name: string;
@@ -104,4 +181,6 @@ export interface WorkspaceSnapshot {
   tasks: StudyTask[];
   thesisChapters: ThesisChapter[];
   sessions: StudySession[];
+  inquiries: CustomerInquiry[];
+  chatbots: ChatbotConfig[];
 }

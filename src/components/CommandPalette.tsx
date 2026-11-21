@@ -1,4 +1,4 @@
-import { BookOpen, FileText, Layers, Search, CheckSquare, X } from 'lucide-react';
+import { BookOpen, Bot, FileText, Layers, Search, CheckSquare, MessageSquareQuote, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { WorkspaceSnapshot } from '../types';
 import type { NavView } from './Sidebar';
@@ -23,7 +23,7 @@ export function CommandPalette({ open, onClose, workspace, onNavigate }: Command
     const q = query.trim().toLowerCase();
     const items: Array<{
       id: string;
-      kind: 'Course' | 'Note' | 'Flashcard' | 'Task';
+      kind: 'Course' | 'Note' | 'Flashcard' | 'Task' | 'Inquiry' | 'Chatbot';
       title: string;
       subtitle: string;
       view: NavView;
@@ -86,6 +86,46 @@ export function CommandPalette({ open, onClose, workspace, onNavigate }: Command
       }
     }
 
+    if (workspace.inquiries) {
+      for (const inq of workspace.inquiries) {
+        if (
+          !q ||
+          inq.subject.toLowerCase().includes(q) ||
+          inq.customerName.toLowerCase().includes(q) ||
+          inq.category.toLowerCase().includes(q) ||
+          inq.messages.some((m) => m.content.toLowerCase().includes(q))
+        ) {
+          items.push({
+            id: `inq-${inq.id}`,
+            kind: 'Inquiry',
+            title: inq.subject,
+            subtitle: `${inq.customerName} · ${inq.category.replace('_', ' ')} · ${inq.status}`,
+            view: 'customer-response' as NavView,
+          });
+        }
+      }
+    }
+
+    if (workspace.chatbots) {
+      for (const bot of workspace.chatbots) {
+        if (
+          !q ||
+          bot.name.toLowerCase().includes(q) ||
+          bot.description.toLowerCase().includes(q) ||
+          bot.category.toLowerCase().includes(q)
+        ) {
+          items.push({
+            id: `bot-${bot.id}`,
+            kind: 'Chatbot',
+            title: bot.name,
+            subtitle: `${bot.category} · ${bot.model} · ${bot.autoReplyToInquiries ? 'Auto-Responder' : 'Assistant'}`,
+            view: 'chatbots',
+            targetId: bot.id,
+          });
+        }
+      }
+    }
+
     return items.slice(0, 12);
   }, [query, workspace]);
 
@@ -99,6 +139,10 @@ export function CommandPalette({ open, onClose, workspace, onNavigate }: Command
         return <FileText className="h-4 w-4 text-[#d2bbff]" />;
       case 'Flashcard':
         return <Layers className="h-4 w-4 text-[#c0c1ff]" />;
+      case 'Inquiry':
+        return <MessageSquareQuote className="h-4 w-4 text-purple-400" />;
+      case 'Chatbot':
+        return <Bot className="h-4 w-4 text-[#4cd7f6]" />;
       default:
         return <CheckSquare className="h-4 w-4 text-emerald-400" />;
     }

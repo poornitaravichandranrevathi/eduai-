@@ -3,8 +3,15 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type {
+  ChatbotCategory,
+  ChatbotConfig,
   Course,
+  CustomerInquiry,
   Flashcard,
+  InquiryCategory,
+  InquiryMessage,
+  InquiryPriority,
+  InquiryStatus,
   ResearchNote,
   StudySession,
   StudyTask,
@@ -16,8 +23,10 @@ import type {
 // Ensure environment variables from .env are loaded
 dotenv.config();
 
-const DATA_DIR = path.resolve(process.cwd(), '.data');
-const DB_FILE = path.join(DATA_DIR, 'edusphere-db.json');
+const IS_VERCEL = Boolean(process.env.VERCEL);
+const DATA_DIR = IS_VERCEL ? path.join('/tmp', '.data') : path.resolve(process.cwd(), '.data');
+const BUNDLED_DB_FILE = path.resolve(process.cwd(), '.data', 'edusphere-db.json');
+const DB_FILE = IS_VERCEL ? path.join(DATA_DIR, 'edusphere-db.json') : BUNDLED_DB_FILE;
 
 let cachedClient: SupabaseClient | null = null;
 let cachedKey = '';
@@ -144,7 +153,7 @@ export async function getSupabaseStatus(): Promise<SupabaseStatus> {
   }
 
   try {
-    const [c, m, n, f, t, ch, s, sc] = await Promise.all([
+    const [c, m, n, f, t, ch, s, sc, iq, cb] = await Promise.all([
       client.from('courses').select('id', { count: 'exact', head: true }),
       client.from('syllabus_modules').select('id', { count: 'exact', head: true }),
       client.from('research_notes').select('id', { count: 'exact', head: true }),
@@ -153,6 +162,8 @@ export async function getSupabaseStatus(): Promise<SupabaseStatus> {
       client.from('thesis_chapters').select('id', { count: 'exact', head: true }),
       client.from('study_sessions').select('id', { count: 'exact', head: true }),
       client.from('scholar_profiles').select('id', { count: 'exact', head: true }),
+      client.from('customer_inquiries').select('id', { count: 'exact', head: true }),
+      client.from('chatbots').select('id', { count: 'exact', head: true }),
     ]);
 
     const error =
@@ -184,6 +195,8 @@ export async function getSupabaseStatus(): Promise<SupabaseStatus> {
         thesis_chapters: ch.count ?? 0,
         study_sessions: s.count ?? 0,
         scholar_profiles: sc.count ?? 0,
+        customer_inquiries: iq?.count ?? 0,
+        chatbots: cb?.count ?? 0,
       },
       error: null,
     };
@@ -230,7 +243,11 @@ export async function updateSupabaseConfig(config: {
     updateOrAppend('SUPABASE_SERVICE_ROLE_KEY', config.serviceRoleKey.trim());
   }
 
-  fs.writeFileSync(envPath, content, 'utf8');
+  try {
+    fs.writeFileSync(envPath, content, 'utf8');
+  } catch {
+    console.warn('[Storage] .env file write skipped in read-only environment');
+  }
 
   cachedClient = null;
   cachedKey = '';
@@ -393,6 +410,60 @@ export async function seedSupabaseFromSnapshot(
     const { error: sErr } = await client.from('study_sessions').upsert(sessionsPayload, { onConflict: 'id' });
     if (sErr) throw new Error(`Failed to seed study_sessions: ${sErr.message}`);
     counts.study_sessions = sessionsPayload.length;
+  }
+
+  // 9. Customer Inquiries & Responses
+  if (data.inquiries && data.inquiries.length > 0) {
+    const inquiriesPayload = data.inquiries.map((iq) => ({
+      id: iq.id,
+      customer_name: iq.customerName,
+      customer_email: iq.customerEmail,
+      subject: iq.subject,
+      category: iq.category,
+      priority: iq.priority,
+      status: iq.status,
+      course_id: iq.courseId || null,
+      messages: iq.messages,
+      ai_suggested_response: iq.aiSuggestedResponse || '',
+      satisfaction_rating: iq.satisfactionRating ?? null,
+      customer_feedback: iq.customerFeedback || '',
+      created_at: iq.createdAt,
+      updated_at: iq.updatedAt,
+    }));
+    const { error: iqErr } = await client
+      .from('customer_inquiries')
+      .upsert(inquiriesPayload, { onConflict: 'id' });
+    if (iqErr) console.warn('[Supabase Seed] customer_inquiries warning:', iqErr.message);
+    else counts.customer_inquiries = inquiriesPayload.length;
+  }
+
+  // 10. AI Chatbots & Auto-Responders
+  if (data.chatbots && data.chatbots.length > 0) {
+    const chatbotsPayload = data.chatbots.map((cb) => ({
+      id: cb.id,
+      name: cb.name,
+      description: cb.description || '',
+      avatar_icon: cb.avatarIcon || 'bot',
+      avatar_color: cb.avatarColor || 'purple',
+      category: cb.category,
+      model: cb.model || 'gemini-4-hydrogen',
+      temperature: cb.temperature ?? 0.7,
+      system_prompt: cb.systemPrompt || '',
+      welcome_message: cb.welcomeMessage || '',
+      suggested_prompts: cb.suggestedPrompts || [],
+      knowledge_base_course_ids: cb.knowledgeBaseCourseIds || [],
+      assigned_inquiry_categories: cb.assignedInquiryCategories || [],
+      is_active: cb.isActive !== false,
+      auto_reply_to_inquiries: cb.autoReplyToInquiries === true,
+      metrics: cb.metrics || { conversationsCount: 0, resolvedTicketsCount: 0, avgSatisfaction: 5.0 },
+      created_at: cb.createdAt,
+      updated_at: cb.updatedAt,
+    }));
+    const { error: cbErr } = await client
+      .from('chatbots')
+      .upsert(chatbotsPayload, { onConflict: 'id' });
+    if (cbErr) console.warn('[Supabase Seed] chatbots warning:', cbErr.message);
+    else counts.chatbots = chatbotsPayload.length;
   }
 
   return {
@@ -828,33 +899,250 @@ export function createSeedData(): WorkspaceSnapshot {
         completedAt: '2026-11-14T20:00:00Z',
       },
     ],
+    inquiries: [
+      {
+        id: 'inq-101',
+        customerName: 'Marcus Sterling',
+        customerEmail: 'm.sterling@ethz.ch',
+        subject: 'Request for Chapter 3 Methodology Review & LaTeX Formatting Guidance',
+        category: 'Thesis & Research',
+        priority: 'high',
+        status: 'in_progress',
+        courseId: 'cs-482',
+        createdAt: '2026-11-18T09:30:00Z',
+        updatedAt: '2026-11-18T14:15:00Z',
+        messages: [
+          {
+            id: 'msg-101-1',
+            sender: 'customer',
+            senderName: 'Marcus Sterling',
+            content:
+              'Hello EduSphere Advisory Team, I have drafted the mathematical formulation of our Top-K Sparse Autoencoder ablation in Section 3.2. Could you verify if the loss function weighting for k_aux dead-latent resampling aligns with current lab standards?',
+            createdAt: '2026-11-18T09:30:00Z',
+          },
+          {
+            id: 'msg-101-2',
+            sender: 'support_agent',
+            senderName: 'Dr. Julian Vance (Advisory Faculty)',
+            content:
+              'Hi Marcus, your mathematical formulation for k_aux = 512 is well-structured. We recommend adding a short paragraph explicitly comparing the reconstruction error vs. L0 sparsity tradeoff curve. We have flagged this for your upcoming review checkpoint.',
+            createdAt: '2026-11-18T14:15:00Z',
+          },
+        ],
+        aiSuggestedResponse:
+          'Based on Chapter 3 methodology, the dead-latent auxiliary loss coefficient (alpha = 0.03) ensures stability without biasing dictionary polytope angles. Recommended citation: Templeton et al. (2024).',
+      },
+      {
+        id: 'inq-102',
+        customerName: 'Priya Nair',
+        customerEmail: 'priya.nair@stanford.edu',
+        subject: 'Clarification on Marchenko-Pastur Spectral Tail Proof in Problem Set 3',
+        category: 'Course Content',
+        priority: 'medium',
+        status: 'resolved',
+        courseId: 'stat-390',
+        createdAt: '2026-11-16T11:20:00Z',
+        updatedAt: '2026-11-17T16:00:00Z',
+        messages: [
+          {
+            id: 'msg-102-1',
+            sender: 'customer',
+            senderName: 'Priya Nair',
+            content:
+              'Professor Al-Mansoor, in Problem 3.b, does the spectral density integral require assuming gamma = p/n in (0, 1) or does the empirical spectral distribution lemma extend naturally to the overparameterized gamma > 1 regime?',
+            createdAt: '2026-11-16T11:20:00Z',
+          },
+          {
+            id: 'msg-102-2',
+            sender: 'support_agent',
+            senderName: 'Academic Teaching Fellow',
+            content:
+              'Hello Priya! Yes, for gamma > 1, the Marchenko-Pastur distribution develops a point mass of weight 1 - 1/gamma at the origin lambda = 0. The continuous density formula remains valid for the non-zero spectral support [(1 - sqrt(gamma))^2, (1 + sqrt(gamma))^2].',
+            createdAt: '2026-11-17T15:45:00Z',
+          },
+        ],
+        aiSuggestedResponse:
+          'In the overparameterized p > n regime (gamma > 1), rank(X) <= n, which guarantees exactly p - n zero eigenvalues. The Stieltjes transform captures this point mass at zero.',
+        satisfactionRating: 5,
+        customerFeedback: 'Extremely prompt and rigorous academic response! Saved me hours of confusion.',
+      },
+      {
+        id: 'inq-103',
+        customerName: 'Liam Zhao',
+        customerEmail: 'l.zhao@mit.edu',
+        subject: 'Surface Code Simulation Cluster Access & API Quota Increase',
+        category: 'Technical Support',
+        priority: 'high',
+        status: 'pending',
+        courseId: 'phys-410',
+        createdAt: '2026-11-19T08:45:00Z',
+        updatedAt: '2026-11-19T08:45:00Z',
+        messages: [
+          {
+            id: 'msg-103-1',
+            sender: 'customer',
+            senderName: 'Liam Zhao',
+            content:
+              'Hi team, our MWPM decoding Monte Carlo simulations on d=7 rotated surface codes require 32 additional GPU hours on the campus cluster. Could you approve our compute quota allocation for this week?',
+            createdAt: '2026-11-19T08:45:00Z',
+          },
+        ],
+        aiSuggestedResponse:
+          'Your GPU cluster allocation request for PHYS 410 has been validated against active lab quotas. An automatic 48-hour compute burst allocation is available for research-tier student accounts.',
+      },
+    ],
+    chatbots: [
+      {
+        id: 'bot-advising-socrates',
+        name: 'Socrates Advising AI',
+        description: 'Academic advisor specializing in degree requirements, course prerequisites, and curriculum planning.',
+        avatarIcon: 'graduation-cap',
+        avatarColor: 'purple',
+        category: 'Advisory',
+        model: 'gemini-3.5-flash',
+        temperature: 0.6,
+        systemPrompt:
+          'You are Socrates Advising AI, an academic advisor at EduSphere AI. You guide graduate and undergraduate scholars through course prerequisites, research milestones, degree requirements, and academic planning with precision, encouraging tone, and clear bullet points.',
+        welcomeMessage:
+          'Greetings, scholar! I am Socrates, your academic advising copilot. How can I assist you with your degree milestones, course prerequisites, or study plans today?',
+        suggestedPrompts: [
+          'What are the prerequisites for CS 482 Neural Systems?',
+          'How should I balance 12 credits with graduate thesis research?',
+          'Can you help me prepare an academic degree completion timeline?',
+        ],
+        knowledgeBaseCourseIds: ['cs-482', 'stat-390'],
+        assignedInquiryCategories: ['Academic Advisory', 'General Inquiry'],
+        isActive: true,
+        autoReplyToInquiries: true,
+        metrics: {
+          conversationsCount: 142,
+          resolvedTicketsCount: 88,
+          avgSatisfaction: 4.9,
+        },
+        createdAt: '2026-11-01T10:00:00Z',
+        updatedAt: '2026-11-18T16:00:00Z',
+      },
+      {
+        id: 'bot-aegis-support',
+        name: 'Aegis Customer & Support Bot',
+        description: '24/7 technical and customer support triage bot for campus compute clusters, LMS access, and student tickets.',
+        avatarIcon: 'shield',
+        avatarColor: 'emerald',
+        category: 'Student Support',
+        model: 'gemini-3.5-flash',
+        temperature: 0.5,
+        systemPrompt:
+          'You are Aegis Support Bot, a dedicated student service and technical support specialist for EduSphere AI. You resolve computing cluster issues, authentication errors, deadline extension inquiries, and ticketing triage promptly and courteously.',
+        welcomeMessage:
+          'Hello! Aegis Support Bot here. Need help with cluster access, syllabus policies, account credentials, or ticket status?',
+        suggestedPrompts: [
+          'How do I request an extension for an assignment?',
+          'Why is my GPU cluster simulation session queued?',
+          'Where can I check syllabus grading policy on late work?',
+        ],
+        knowledgeBaseCourseIds: ['phys-410'],
+        assignedInquiryCategories: ['Technical Support', 'Billing & Account'],
+        isActive: true,
+        autoReplyToInquiries: true,
+        metrics: {
+          conversationsCount: 310,
+          resolvedTicketsCount: 245,
+          avgSatisfaction: 4.8,
+        },
+        createdAt: '2026-11-05T09:00:00Z',
+        updatedAt: '2026-11-19T14:30:00Z',
+      },
+      {
+        id: 'bot-hypatia-research',
+        name: 'Hypatia Thesis Mentor',
+        description: 'Advanced research mentor for LaTeX formulation, sparse mechanistic interpretability, and literature citations.',
+        avatarIcon: 'sparkles',
+        avatarColor: 'sky',
+        category: 'Research Mentor',
+        model: 'gemini-3.5-flash',
+        temperature: 0.7,
+        systemPrompt:
+          'You are Hypatia Thesis Mentor, an expert research advisor for computational sciences and mathematics. You assist scholars with thesis methodology, rigorous theorem formulation, experimental designs, and literature review synthesis.',
+        welcomeMessage:
+          'Welcome to the Research Studio! I am Hypatia, ready to review your thesis chapters, formal proofs, or experimental ablation designs.',
+        suggestedPrompts: [
+          'Review my thesis Chapter 3 Cross-Modal Alignment Index formulation.',
+          'How should I structure the causal ablation section in my methodology?',
+          'Help me draft LaTeX equations for Top-K sparse autoencoders.',
+        ],
+        knowledgeBaseCourseIds: ['cs-482', 'stat-390', 'phys-410'],
+        assignedInquiryCategories: ['Thesis & Research', 'Course Content'],
+        isActive: true,
+        autoReplyToInquiries: true,
+        metrics: {
+          conversationsCount: 89,
+          resolvedTicketsCount: 62,
+          avgSatisfaction: 5.0,
+        },
+        createdAt: '2026-11-08T12:00:00Z',
+        updatedAt: '2026-11-19T18:00:00Z',
+      },
+    ],
   };
 }
 
+function normalizeSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
+  if (!snapshot.inquiries || !Array.isArray(snapshot.inquiries)) {
+    snapshot.inquiries = createSeedData().inquiries;
+  }
+  if (!snapshot.chatbots || !Array.isArray(snapshot.chatbots)) {
+    snapshot.chatbots = createSeedData().chatbots;
+  }
+  return snapshot;
+}
+
 export function readLocalDb(): WorkspaceSnapshot {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const raw = fs.readFileSync(DB_FILE, 'utf8');
+      return normalizeSnapshot(JSON.parse(raw) as WorkspaceSnapshot);
+    } catch {
+      // fallback
+    }
   }
-  if (!fs.existsSync(DB_FILE)) {
-    const seed = createSeedData();
-    fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), 'utf8');
-    return seed;
+  if (fs.existsSync(BUNDLED_DB_FILE)) {
+    try {
+      const raw = fs.readFileSync(BUNDLED_DB_FILE, 'utf8');
+      const parsed = normalizeSnapshot(JSON.parse(raw) as WorkspaceSnapshot);
+      if (IS_VERCEL) {
+        try {
+          if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+          fs.writeFileSync(DB_FILE, raw, 'utf8');
+        } catch {
+          // ignore in read-only environment
+        }
+      }
+      return parsed;
+    } catch {
+      // fallback
+    }
   }
+  const seed = createSeedData();
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(raw) as WorkspaceSnapshot;
-  } catch {
-    const seed = createSeedData();
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
     fs.writeFileSync(DB_FILE, JSON.stringify(seed, null, 2), 'utf8');
-    return seed;
+  } catch {
+    // ignore in read-only environment
   }
+  return seed;
 }
 
 export function writeLocalDb(data: WorkspaceSnapshot): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch {
+    // ignore in read-only environment
   }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
 /**
@@ -875,6 +1163,8 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
       { data: chaptersData, error: chErr },
       { data: sessionsData, error: sErr },
       { data: scholarData },
+      { data: inqData },
+      { data: cbData },
     ] = await Promise.all([
       client.from('courses').select('*'),
       client.from('syllabus_modules').select('*').order('week', { ascending: true }),
@@ -884,6 +1174,8 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
       client.from('thesis_chapters').select('*').order('order_index', { ascending: true }),
       client.from('study_sessions').select('*').order('completed_at', { ascending: false }),
       client.from('scholar_profiles').select('*').limit(1).maybeSingle(),
+      client.from('customer_inquiries').select('*').order('created_at', { ascending: false }),
+      client.from('chatbots').select('*').order('created_at', { ascending: false }),
     ]);
 
     if (cErr || mErr || nErr || fErr || tErr || chErr || sErr) {
@@ -1008,6 +1300,48 @@ async function fetchFromSupabase(): Promise<WorkspaceSnapshot | null> {
         focusTopic: s.focus_topic,
         completedAt: s.completed_at,
       })),
+      inquiries:
+        inqData && inqData.length > 0
+          ? inqData.map((iq) => ({
+              id: iq.id,
+              customerName: iq.customer_name,
+              customerEmail: iq.customer_email,
+              subject: iq.subject,
+              category: iq.category,
+              priority: iq.priority,
+              status: iq.status,
+              courseId: iq.course_id || undefined,
+              messages: Array.isArray(iq.messages) ? iq.messages : [],
+              aiSuggestedResponse: iq.ai_suggested_response || '',
+              satisfactionRating: iq.satisfaction_rating || undefined,
+              customerFeedback: iq.customer_feedback || '',
+              createdAt: iq.created_at,
+              updatedAt: iq.updated_at,
+            }))
+          : readLocalDb().inquiries,
+      chatbots:
+        cbData && cbData.length > 0
+          ? cbData.map((cb) => ({
+              id: cb.id,
+              name: cb.name,
+              description: cb.description || '',
+              avatarIcon: cb.avatar_icon || 'bot',
+              avatarColor: cb.avatar_color || 'purple',
+              category: cb.category,
+              model: cb.model || 'gemini-4-hydrogen',
+              temperature: Number(cb.temperature ?? 0.7),
+              systemPrompt: cb.system_prompt || '',
+              welcomeMessage: cb.welcome_message || '',
+              suggestedPrompts: Array.isArray(cb.suggested_prompts) ? cb.suggested_prompts : [],
+              knowledgeBaseCourseIds: Array.isArray(cb.knowledge_base_course_ids) ? cb.knowledge_base_course_ids : [],
+              assignedInquiryCategories: Array.isArray(cb.assigned_inquiry_categories) ? cb.assigned_inquiry_categories : [],
+              isActive: cb.is_active !== false,
+              autoReplyToInquiries: cb.auto_reply_to_inquiries === true,
+              metrics: cb.metrics || { conversationsCount: 0, resolvedTicketsCount: 0, avgSatisfaction: 5.0 },
+              createdAt: cb.created_at,
+              updatedAt: cb.updated_at,
+            }))
+          : readLocalDb().chatbots,
     };
   } catch (err: any) {
     console.error('[Supabase] Unexpected error fetching workspace:', err);
@@ -1307,4 +1641,354 @@ export async function recordStudySession(session: StudySession): Promise<StudySe
     if (error) console.error('[Supabase] Failed to insert study session:', error.message);
   }
   return session;
+}
+
+export function generateAiSuggestedInquiryResponse(
+  category: string,
+  subject: string,
+  customerMessage: string
+): string {
+  try {
+    const db = readLocalDb();
+    const assignedBot = db.chatbots?.find(
+      (b) =>
+        b.isActive &&
+        b.autoReplyToInquiries &&
+        b.assignedInquiryCategories.includes(category as InquiryCategory)
+    );
+    if (assignedBot) {
+      return `[${assignedBot.name} Auto-Response]: Hello! Regarding your inquiry "${subject}": ${
+        assignedBot.category === 'Advisory'
+          ? 'We have reviewed your curriculum milestones and recommended prerequisite paths. Please verify against your registered coursework in the portal.'
+          : assignedBot.category === 'Student Support'
+          ? 'Our automated helpdesk has checked system logs. Please ensure your authentication tokens and lab access permissions are active.'
+          : assignedBot.category === 'Research Mentor'
+          ? 'Your research methodology inquiry has been reviewed. Ensure your LaTeX derivations adhere to thesis committee standards and include empirical error bounds.'
+          : 'Thank you for reaching out. We have logged your request and prioritized it according to our response policy.'
+      }`;
+    }
+  } catch {
+    // fallback
+  }
+
+  switch (category) {
+    case 'Academic Advisory':
+      return `Thank you for reaching out to EduSphere Academic Advisory regarding "${subject}". Based on your course curriculum and academic milestones, we recommend reviewing the syllabus schedule for prerequisites and scheduling a 15-minute sync with the course director during posted office hours.`;
+    case 'Course Content':
+      return `Regarding your inquiry on "${subject}": In this coursework unit, the theoretical derivation builds directly upon foundational principles. Please verify your working steps against the supplementary seminar notes, and feel free to submit specific derivation checkpoints for further evaluation.`;
+    case 'Thesis & Research':
+      return `Thank you for your research update on "${subject}". Your proposed methodology and experimental formulation align well with graduate thesis guidelines. Ensure that all empirical evaluations report confidence intervals, and reference the citation style guide in the Thesis Studio.`;
+    case 'Technical Support':
+      return `Hello! Your technical inquiry regarding "${subject}" has been received. Our compute infrastructure team has checked current cluster availability and authentication tokens. Please ensure your environment secrets match your student profile credentials.`;
+    case 'Billing & Account':
+      return `Thank you for contacting Student Services regarding "${subject}". Your enrollment verification and laboratory access tier have been reviewed. No outstanding administrative holds exist on your academic account.`;
+    default:
+      return `Thank you for reaching out to EduSphere Academic Support regarding "${subject}". We have logged your request and a faculty advisor or support specialist will review your inquiry shortly.`;
+  }
+}
+
+export async function getCustomerInquiries(): Promise<CustomerInquiry[]> {
+  const snapshot = await getWorkspaceSnapshot();
+  return snapshot.inquiries || [];
+}
+
+export async function createCustomerInquiry(
+  payload: Partial<CustomerInquiry> & { message?: string }
+): Promise<CustomerInquiry> {
+  const db = readLocalDb();
+  if (!db.inquiries) db.inquiries = [];
+
+  const now = new Date().toISOString();
+  const initialContent =
+    payload.message?.trim() ||
+    payload.messages?.[0]?.content?.trim() ||
+    'No inquiry description provided.';
+
+  const aiDraft = generateAiSuggestedInquiryResponse(
+    payload.category || 'General Inquiry',
+    payload.subject?.trim() || 'Academic Inquiry',
+    initialContent
+  );
+
+  const inquiry: CustomerInquiry = {
+    id: payload.id || `inq-${Date.now()}`,
+    customerName: payload.customerName?.trim() || 'Student Scholar',
+    customerEmail: payload.customerEmail?.trim() || 'scholar@university.edu',
+    subject: payload.subject?.trim() || 'Academic Inquiry',
+    category: (payload.category as InquiryCategory) || 'General Inquiry',
+    priority: (payload.priority as InquiryPriority) || 'medium',
+    status: 'pending',
+    courseId: payload.courseId || undefined,
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        id: `msg-${Date.now()}-1`,
+        sender: 'customer',
+        senderName: payload.customerName?.trim() || 'Student Scholar',
+        content: initialContent,
+        createdAt: now,
+      },
+    ],
+    aiSuggestedResponse: aiDraft,
+  };
+
+  db.inquiries.unshift(inquiry);
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('customer_inquiries').insert({
+      id: inquiry.id,
+      customer_name: inquiry.customerName,
+      customer_email: inquiry.customerEmail,
+      subject: inquiry.subject,
+      category: inquiry.category,
+      priority: inquiry.priority,
+      status: inquiry.status,
+      course_id: inquiry.courseId || null,
+      messages: inquiry.messages,
+      ai_suggested_response: inquiry.aiSuggestedResponse,
+      satisfaction_rating: null,
+      customer_feedback: '',
+      created_at: inquiry.createdAt,
+      updated_at: inquiry.updatedAt,
+    });
+    if (error) console.error('[Supabase] Failed to insert customer inquiry:', error.message);
+  }
+
+  return inquiry;
+}
+
+export async function addInquiryReply(
+  inquiryId: string,
+  reply: { content: string; sender: 'customer' | 'support_agent'; senderName: string }
+): Promise<CustomerInquiry | null> {
+  const db = readLocalDb();
+  if (!db.inquiries) db.inquiries = [];
+  const inq = db.inquiries.find((i) => i.id === inquiryId);
+  if (!inq) return null;
+
+  const now = new Date().toISOString();
+  const newMessage: InquiryMessage = {
+    id: `msg-${Date.now()}`,
+    sender: reply.sender,
+    senderName: reply.senderName,
+    content: reply.content.trim(),
+    createdAt: now,
+  };
+
+  inq.messages.push(newMessage);
+  inq.updatedAt = now;
+  if (reply.sender === 'support_agent' && inq.status === 'pending') {
+    inq.status = 'responded';
+  }
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client
+      .from('customer_inquiries')
+      .update({
+        messages: inq.messages,
+        status: inq.status,
+        updated_at: inq.updatedAt,
+      })
+      .eq('id', inquiryId);
+    if (error) console.error('[Supabase] Failed to update inquiry reply:', error.message);
+  }
+
+  return inq;
+}
+
+export async function updateInquiryStatus(
+  inquiryId: string,
+  status: InquiryStatus
+): Promise<CustomerInquiry | null> {
+  const db = readLocalDb();
+  if (!db.inquiries) db.inquiries = [];
+  const inq = db.inquiries.find((i) => i.id === inquiryId);
+  if (!inq) return null;
+
+  inq.status = status;
+  inq.updatedAt = new Date().toISOString();
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client
+      .from('customer_inquiries')
+      .update({ status: inq.status, updated_at: inq.updatedAt })
+      .eq('id', inquiryId);
+    if (error) console.error('[Supabase] Failed to update inquiry status:', error.message);
+  }
+
+  return inq;
+}
+
+export async function rateInquiryResponse(
+  inquiryId: string,
+  rating: number,
+  feedback?: string
+): Promise<CustomerInquiry | null> {
+  const db = readLocalDb();
+  if (!db.inquiries) db.inquiries = [];
+  const inq = db.inquiries.find((i) => i.id === inquiryId);
+  if (!inq) return null;
+
+  inq.satisfactionRating = Math.min(Math.max(Number(rating), 1), 5);
+  if (feedback !== undefined) inq.customerFeedback = feedback.trim();
+  inq.updatedAt = new Date().toISOString();
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client
+      .from('customer_inquiries')
+      .update({
+        satisfaction_rating: inq.satisfactionRating,
+        customer_feedback: inq.customerFeedback,
+        updated_at: inq.updatedAt,
+      })
+      .eq('id', inquiryId);
+    if (error) console.error('[Supabase] Failed to rate inquiry:', error.message);
+  }
+
+  return inq;
+}
+
+export async function deleteCustomerInquiry(inquiryId: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (!db.inquiries) db.inquiries = [];
+  const initialLen = db.inquiries.length;
+  db.inquiries = db.inquiries.filter((i) => i.id !== inquiryId);
+  const deleted = db.inquiries.length < initialLen;
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('customer_inquiries').delete().eq('id', inquiryId);
+    if (error) console.error('[Supabase] Failed to delete customer inquiry:', error.message);
+  }
+  return deleted;
+}
+
+// AI Chatbots & Auto-Responder Store Methods
+export async function getChatbots(): Promise<ChatbotConfig[]> {
+  const snapshot = await getWorkspaceSnapshot();
+  return snapshot.chatbots || [];
+}
+
+export async function createOrUpdateChatbot(
+  payload: Partial<ChatbotConfig>
+): Promise<ChatbotConfig> {
+  const db = readLocalDb();
+  if (!db.chatbots) db.chatbots = [];
+
+  const now = new Date().toISOString();
+  let bot: ChatbotConfig;
+
+  if (payload.id) {
+    const existingIdx = db.chatbots.findIndex((b) => b.id === payload.id);
+    if (existingIdx >= 0) {
+      bot = {
+        ...db.chatbots[existingIdx],
+        ...payload,
+        updatedAt: now,
+      } as ChatbotConfig;
+      db.chatbots[existingIdx] = bot;
+    } else {
+      bot = {
+        id: payload.id,
+        name: payload.name || 'New AI Assistant',
+        description: payload.description || '',
+        avatarIcon: payload.avatarIcon || 'bot',
+        avatarColor: payload.avatarColor || 'purple',
+        category: payload.category || 'Student Support',
+        model: payload.model || 'gemini-4-hydrogen',
+        temperature: Number(payload.temperature ?? 0.7),
+        systemPrompt: payload.systemPrompt || '',
+        welcomeMessage: payload.welcomeMessage || 'Hello! How can I assist you?',
+        suggestedPrompts: payload.suggestedPrompts || [],
+        knowledgeBaseCourseIds: payload.knowledgeBaseCourseIds || [],
+        assignedInquiryCategories: payload.assignedInquiryCategories || [],
+        isActive: payload.isActive !== false,
+        autoReplyToInquiries: payload.autoReplyToInquiries === true,
+        metrics: payload.metrics || { conversationsCount: 0, resolvedTicketsCount: 0, avgSatisfaction: 5.0 },
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.chatbots.unshift(bot);
+    }
+  } else {
+    bot = {
+      id: `bot-${Date.now()}`,
+      name: payload.name?.trim() || 'New AI Assistant',
+      description: payload.description?.trim() || '',
+      avatarIcon: payload.avatarIcon || 'bot',
+      avatarColor: payload.avatarColor || 'purple',
+      category: payload.category || 'Student Support',
+      model: payload.model || 'gemini-4-hydrogen',
+      temperature: Number(payload.temperature ?? 0.7),
+      systemPrompt: payload.systemPrompt || '',
+      welcomeMessage: payload.welcomeMessage || 'Hello! How can I assist you?',
+      suggestedPrompts: payload.suggestedPrompts || [],
+      knowledgeBaseCourseIds: payload.knowledgeBaseCourseIds || [],
+      assignedInquiryCategories: payload.assignedInquiryCategories || [],
+      isActive: payload.isActive !== false,
+      autoReplyToInquiries: payload.autoReplyToInquiries === true,
+      metrics: { conversationsCount: 0, resolvedTicketsCount: 0, avgSatisfaction: 5.0 },
+      createdAt: now,
+      updatedAt: now,
+    };
+    db.chatbots.unshift(bot);
+  }
+
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('chatbots').upsert(
+      {
+        id: bot.id,
+        name: bot.name,
+        description: bot.description,
+        avatar_icon: bot.avatarIcon,
+        avatar_color: bot.avatarColor,
+        category: bot.category,
+        model: bot.model,
+        temperature: bot.temperature,
+        system_prompt: bot.systemPrompt,
+        welcome_message: bot.welcomeMessage,
+        suggested_prompts: bot.suggestedPrompts,
+        knowledge_base_course_ids: bot.knowledgeBaseCourseIds,
+        assigned_inquiry_categories: bot.assignedInquiryCategories,
+        is_active: bot.isActive,
+        auto_reply_to_inquiries: bot.autoReplyToInquiries,
+        metrics: bot.metrics,
+        created_at: bot.createdAt,
+        updated_at: bot.updatedAt,
+      },
+      { onConflict: 'id' }
+    );
+    if (error) console.error('[Supabase] Failed to upsert chatbot:', error.message);
+  }
+
+  return bot;
+}
+
+export async function deleteChatbot(botId: string): Promise<boolean> {
+  const db = readLocalDb();
+  if (!db.chatbots) db.chatbots = [];
+  const initialLen = db.chatbots.length;
+  db.chatbots = db.chatbots.filter((b) => b.id !== botId);
+  const deleted = db.chatbots.length < initialLen;
+  writeLocalDb(db);
+
+  const client = getSupabase();
+  if (client) {
+    const { error } = await client.from('chatbots').delete().eq('id', botId);
+    if (error) console.error('[Supabase] Failed to delete chatbot:', error.message);
+  }
+  return deleted;
 }

@@ -103,12 +103,54 @@ create table if not exists public.scholar_profiles (
   updated_at timestamptz not null default now()
 );
 
+-- 9. Customer Support & Inquiries Table
+create table if not exists public.customer_inquiries (
+  id text primary key,
+  customer_name text not null,
+  customer_email text not null,
+  subject text not null,
+  category text not null check (category in ('Academic Advisory', 'Course Content', 'Technical Support', 'Thesis & Research', 'Billing & Account', 'General Inquiry')),
+  priority text not null check (priority in ('high', 'medium', 'low')) default 'medium',
+  status text not null check (status in ('pending', 'in_progress', 'responded', 'resolved')) default 'pending',
+  course_id text references public.courses(id) on delete set null,
+  messages jsonb not null default '[]'::jsonb,
+  ai_suggested_response text default '',
+  satisfaction_rating integer check (satisfaction_rating between 1 and 5),
+  customer_feedback text default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- 10. AI Chatbots & Customer Auto-Responders
+create table if not exists public.chatbots (
+  id text primary key,
+  name text not null,
+  description text not null default '',
+  avatar_icon text not null default 'bot',
+  avatar_color text not null default 'purple',
+  category text not null default 'Student Support',
+  model text not null default 'gemini-4-hydrogen',
+  temperature numeric not null default 0.7,
+  system_prompt text not null default '',
+  welcome_message text not null default '',
+  suggested_prompts jsonb not null default '[]'::jsonb,
+  knowledge_base_course_ids jsonb not null default '[]'::jsonb,
+  assigned_inquiry_categories jsonb not null default '[]'::jsonb,
+  is_active boolean not null default true,
+  auto_reply_to_inquiries boolean not null default false,
+  metrics jsonb not null default '{"conversationsCount":0,"resolvedTicketsCount":0,"avgSatisfaction":5.0}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 -- Indexes for optimal lookup performance
 create index if not exists idx_syllabus_course on public.syllabus_modules(course_id);
 create index if not exists idx_notes_course on public.research_notes(course_id);
 create index if not exists idx_flashcards_course on public.flashcards(course_id);
 create index if not exists idx_tasks_course on public.study_tasks(course_id);
 create index if not exists idx_sessions_course on public.study_sessions(course_id);
+create index if not exists idx_inquiries_status on public.customer_inquiries(status);
+create index if not exists idx_inquiries_customer on public.customer_inquiries(customer_email);
 
 -- Row Level Security (RLS) Configuration
 -- Enabling RLS and adding policies allows both anon and service_role keys to read and write.
@@ -120,6 +162,8 @@ alter table public.study_tasks enable row level security;
 alter table public.thesis_chapters enable row level security;
 alter table public.study_sessions enable row level security;
 alter table public.scholar_profiles enable row level security;
+alter table public.customer_inquiries enable row level security;
+alter table public.chatbots enable row level security;
 
 -- Permissive policies for workspace data
 drop policy if exists "Allow all on courses" on public.courses;
@@ -142,9 +186,15 @@ create policy "Allow all on thesis_chapters" on public.thesis_chapters for all u
 
 drop policy if exists "Allow all on study_sessions" on public.study_sessions;
 create policy "Allow all on study_sessions" on public.study_sessions for all using (true) with check (true);
- 
+
 drop policy if exists "Allow all on scholar_profiles" on public.scholar_profiles;
 create policy "Allow all on scholar_profiles" on public.scholar_profiles for all using (true) with check (true);
+
+drop policy if exists "Allow all on customer_inquiries" on public.customer_inquiries;
+create policy "Allow all on customer_inquiries" on public.customer_inquiries for all using (true) with check (true);
+
+drop policy if exists "Allow all on chatbots" on public.chatbots;
+create policy "Allow all on chatbots" on public.chatbots for all using (true) with check (true);
 
 -- Explicit PostgreSQL Role Grants
 -- Grants full table and schema access to anon and authenticated roles

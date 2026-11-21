@@ -1,11 +1,13 @@
 import {
   BookOpen,
+  Bot,
   CalendarClock,
   Database,
   FileText,
   GraduationCap,
   Layers,
   LayoutDashboard,
+  MessageSquareQuote,
   Sparkles,
   Timer,
   X,
@@ -20,7 +22,9 @@ export type NavView =
   | 'flashcards'
   | 'planner'
   | 'focus'
-  | 'copilot';
+  | 'copilot'
+  | 'customer-response'
+  | 'chatbots';
 
 interface SidebarProps {
   activeView: NavView;
@@ -35,6 +39,7 @@ interface SidebarProps {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   onOpenSupabaseModal?: () => void;
+  pendingInquiriesCount?: number;
 }
 
 const NAV_GROUPS: Array<{
@@ -59,6 +64,13 @@ const NAV_GROUPS: Array<{
       { id: 'copilot', label: 'AI Copilot', icon: Sparkles },
     ],
   },
+  {
+    heading: 'Student Services & AI',
+    items: [
+      { id: 'customer-response', label: 'Inquiries & Support', icon: MessageSquareQuote },
+      { id: 'chatbots', label: 'Chatbot Studio', icon: Bot },
+    ],
+  },
 ];
 
 export function Sidebar({
@@ -68,6 +80,7 @@ export function Sidebar({
   mobileOpen,
   onCloseMobile,
   onOpenSupabaseModal,
+  pendingInquiriesCount = 0,
 }: SidebarProps) {
   const [imgError, setImgError] = useState(false);
 
@@ -129,6 +142,11 @@ export function Sidebar({
                         }`}
                       />
                       <span className="truncate">{item.label}</span>
+                      {item.id === 'customer-response' && pendingInquiriesCount > 0 && (
+                        <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          {pendingInquiriesCount}
+                        </span>
+                      )}
                     </button>
                   </li>
                 );

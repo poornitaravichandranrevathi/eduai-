@@ -419,5 +419,193 @@
       "focusTopic": "Thesis Chapter 3 methodology drafting",
       "completedAt": "2026-11-14T20:00:00Z"
     }
+  ],
+  "inquiries": [
+    {
+      "id": "inq-101",
+      "customerName": "Marcus Sterling",
+      "customerEmail": "m.sterling@ethz.ch",
+      "subject": "Request for Chapter 3 Methodology Review & LaTeX Formatting Guidance",
+      "category": "Thesis & Research",
+      "priority": "high",
+      "status": "in_progress",
+      "courseId": "cs-482",
+      "createdAt": "2026-11-18T09:30:00Z",
+      "updatedAt": "2026-11-18T14:15:00Z",
+      "messages": [
+        {
+          "id": "msg-101-1",
+          "sender": "customer",
+          "senderName": "Marcus Sterling",
+          "content": "Hello EduSphere Advisory Team, I have drafted the mathematical formulation of our Top-K Sparse Autoencoder ablation in Section 3.2. Could you verify if the loss function weighting for k_aux dead-latent resampling aligns with current lab standards?",
+          "createdAt": "2026-11-18T09:30:00Z"
+        },
+        {
+          "id": "msg-101-2",
+          "sender": "support_agent",
+          "senderName": "Dr. Julian Vance (Advisory Faculty)",
+          "content": "Hi Marcus, your mathematical formulation for k_aux = 512 is well-structured. We recommend adding a short paragraph explicitly comparing the reconstruction error vs. L0 sparsity tradeoff curve. We have flagged this for your upcoming review checkpoint.",
+          "createdAt": "2026-11-18T14:15:00Z"
+        }
+      ],
+      "aiSuggestedResponse": "Based on Chapter 3 methodology, the dead-latent auxiliary loss coefficient (alpha = 0.03) ensures stability without biasing dictionary polytope angles. Recommended citation: Templeton et al. (2024)."
+    },
+    {
+      "id": "inq-102",
+      "customerName": "Priya Nair",
+      "customerEmail": "priya.nair@stanford.edu",
+      "subject": "Clarification on Marchenko-Pastur Spectral Tail Proof in Problem Set 3",
+      "category": "Course Content",
+      "priority": "medium",
+      "status": "resolved",
+      "courseId": "stat-390",
+      "createdAt": "2026-11-16T11:20:00Z",
+      "updatedAt": "2026-11-17T16:00:00Z",
+      "messages": [
+        {
+          "id": "msg-102-1",
+          "sender": "customer",
+          "senderName": "Priya Nair",
+          "content": "Professor Al-Mansoor, in Problem 3.b, does the spectral density integral require assuming gamma = p/n in (0, 1) or does the empirical spectral distribution lemma extend naturally to the overparameterized gamma > 1 regime?",
+          "createdAt": "2026-11-16T11:20:00Z"
+        },
+        {
+          "id": "msg-102-2",
+          "sender": "support_agent",
+          "senderName": "Academic Teaching Fellow",
+          "content": "Hello Priya! Yes, for gamma > 1, the Marchenko-Pastur distribution develops a point mass of weight 1 - 1/gamma at the origin lambda = 0. The continuous density formula remains valid for the non-zero spectral support [(1 - sqrt(gamma))^2, (1 + sqrt(gamma))^2].",
+          "createdAt": "2026-11-17T15:45:00Z"
+        }
+      ],
+      "aiSuggestedResponse": "In the overparameterized p > n regime (gamma > 1), rank(X) <= n, which guarantees exactly p - n zero eigenvalues. The Stieltjes transform captures this point mass at zero.",
+      "satisfactionRating": 5,
+      "customerFeedback": "Extremely prompt and rigorous academic response! Saved me hours of confusion."
+    },
+    {
+      "id": "inq-103",
+      "customerName": "Liam Zhao",
+      "customerEmail": "l.zhao@mit.edu",
+      "subject": "Surface Code Simulation Cluster Access & API Quota Increase",
+      "category": "Technical Support",
+      "priority": "high",
+      "status": "pending",
+      "courseId": "phys-410",
+      "createdAt": "2026-11-19T08:45:00Z",
+      "updatedAt": "2026-11-19T08:45:00Z",
+      "messages": [
+        {
+          "id": "msg-103-1",
+          "sender": "customer",
+          "senderName": "Liam Zhao",
+          "content": "Hi team, our MWPM decoding Monte Carlo simulations on d=7 rotated surface codes require 32 additional GPU hours on the campus cluster. Could you approve our compute quota allocation for this week?",
+          "createdAt": "2026-11-19T08:45:00Z"
+        }
+      ],
+      "aiSuggestedResponse": "Your GPU cluster allocation request for PHYS 410 has been validated against active lab quotas. An automatic 48-hour compute burst allocation is available for research-tier student accounts."
+    }
+  ],
+  "chatbots": [
+    {
+      "id": "bot-advising-socrates",
+      "name": "Socrates Advising AI",
+      "description": "Academic advisor specializing in degree requirements, course prerequisites, and curriculum planning.",
+      "avatarIcon": "graduation-cap",
+      "avatarColor": "purple",
+      "category": "Advisory",
+      "model": "gemini-4-hydrogen",
+      "temperature": 0.6,
+      "systemPrompt": "You are Socrates Advising AI, an academic advisor at EduSphere AI. You guide graduate and undergraduate scholars through course prerequisites, research milestones, degree requirements, and academic planning with precision, encouraging tone, and clear bullet points.",
+      "welcomeMessage": "Greetings, scholar! I am Socrates, your academic advising copilot. How can I assist you with your degree milestones, course prerequisites, or study plans today?",
+      "suggestedPrompts": [
+        "What are the prerequisites for CS 482 Neural Systems?",
+        "How should I balance 12 credits with graduate thesis research?",
+        "Can you help me prepare an academic degree completion timeline?"
+      ],
+      "knowledgeBaseCourseIds": [
+        "cs-482",
+        "stat-390"
+      ],
+      "assignedInquiryCategories": [
+        "Academic Advisory",
+        "General Inquiry"
+      ],
+      "isActive": true,
+      "autoReplyToInquiries": true,
+      "metrics": {
+        "avgSatisfaction": 4.9,
+        "conversationsCount": 144,
+        "resolvedTicketsCount": 88
+      },
+      "createdAt": "2026-11-01T10:00:00+00:00",
+      "updatedAt": "2026-11-21T04:22:41.529Z"
+    },
+    {
+      "id": "bot-aegis-support",
+      "name": "Aegis Customer & Support Bot",
+      "description": "24/7 technical and customer support triage bot for campus compute clusters, LMS access, and student tickets.",
+      "avatarIcon": "shield",
+      "avatarColor": "emerald",
+      "category": "Student Support",
+      "model": "gemini-3.5-flash",
+      "temperature": 0.5,
+      "systemPrompt": "You are Aegis Support Bot, a dedicated student service and technical support specialist for EduSphere AI. You resolve computing cluster issues, authentication errors, deadline extension inquiries, and ticketing triage promptly and courteously.",
+      "welcomeMessage": "Hello! Aegis Support Bot here. Need help with cluster access, syllabus policies, account credentials, or ticket status?",
+      "suggestedPrompts": [
+        "How do I request an extension for an assignment?",
+        "Why is my GPU cluster simulation session queued?",
+        "Where can I check syllabus grading policy on late work?"
+      ],
+      "knowledgeBaseCourseIds": [
+        "phys-410"
+      ],
+      "assignedInquiryCategories": [
+        "Technical Support",
+        "Billing & Account"
+      ],
+      "isActive": true,
+      "autoReplyToInquiries": true,
+      "metrics": {
+        "conversationsCount": 310,
+        "resolvedTicketsCount": 245,
+        "avgSatisfaction": 4.8
+      },
+      "createdAt": "2026-11-05T09:00:00Z",
+      "updatedAt": "2026-11-19T14:30:00Z"
+    },
+    {
+      "id": "bot-hypatia-research",
+      "name": "Hypatia Thesis Mentor",
+      "description": "Advanced research mentor for LaTeX formulation, sparse mechanistic interpretability, and literature citations.",
+      "avatarIcon": "sparkles",
+      "avatarColor": "sky",
+      "category": "Research Mentor",
+      "model": "gemini-4-hydrogen",
+      "temperature": 0.7,
+      "systemPrompt": "You are Hypatia Thesis Mentor, an expert research advisor for computational sciences and mathematics. You assist scholars with thesis methodology, rigorous theorem formulation, experimental designs, and literature review synthesis.",
+      "welcomeMessage": "Welcome to the Research Studio! I am Hypatia, ready to review your thesis chapters, formal proofs, or experimental ablation designs.",
+      "suggestedPrompts": [
+        "Review my thesis Chapter 3 Cross-Modal Alignment Index formulation.",
+        "How should I structure the causal ablation section in my methodology?",
+        "Help me draft LaTeX equations for Top-K sparse autoencoders."
+      ],
+      "knowledgeBaseCourseIds": [
+        "cs-482",
+        "stat-390",
+        "phys-410"
+      ],
+      "assignedInquiryCategories": [
+        "Thesis & Research",
+        "Course Content"
+      ],
+      "isActive": true,
+      "autoReplyToInquiries": true,
+      "metrics": {
+        "avgSatisfaction": 5,
+        "conversationsCount": 91,
+        "resolvedTicketsCount": 62
+      },
+      "createdAt": "2026-11-08T12:00:00+00:00",
+      "updatedAt": "2026-11-21T04:27:58.976Z"
+    }
   ]
 }

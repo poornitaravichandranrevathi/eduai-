@@ -1,6 +1,10 @@
 import type {
+  ChatbotConfig,
   Course,
+  CustomerInquiry,
   Flashcard,
+  InquiryMessage,
+  InquiryStatus,
   ResearchNote,
   StudySession,
   StudyTask,
@@ -144,6 +148,67 @@ export const api = {
         explanation: string;
       }>
     >('/api/ai/quiz', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // Customer Response & Inquiries API
+  getInquiries: () => request<CustomerInquiry[]>('/api/customer-responses'),
+
+  createInquiry: (payload: Partial<CustomerInquiry>) =>
+    request<CustomerInquiry>('/api/customer-responses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  replyToInquiry: (
+    id: string,
+    message: { content: string; sender: 'customer' | 'support_agent'; senderName: string }
+  ) =>
+    request<CustomerInquiry>(`/api/customer-responses/${id}/reply`, {
+      method: 'POST',
+      body: JSON.stringify(message),
+    }),
+
+  updateInquiryStatus: (id: string, status: InquiryStatus) =>
+    request<CustomerInquiry>(`/api/customer-responses/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+
+  rateInquiry: (id: string, rating: number, feedback?: string) =>
+    request<CustomerInquiry>(`/api/customer-responses/${id}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, feedback }),
+    }),
+
+  deleteInquiry: (id: string) =>
+    request<{ ok: boolean }>(`/api/customer-responses/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // AI Chatbots & Auto-Responder API
+  getChatbots: () => request<ChatbotConfig[]>('/api/chatbots'),
+
+  saveChatbot: (bot: Partial<ChatbotConfig>) =>
+    request<ChatbotConfig>(bot.id ? `/api/chatbots/${bot.id}` : '/api/chatbots', {
+      method: bot.id ? 'PUT' : 'POST',
+      body: JSON.stringify(bot),
+    }),
+
+  deleteChatbot: (id: string) =>
+    request<{ ok: boolean }>(`/api/chatbots/${id}`, {
+      method: 'DELETE',
+    }),
+
+  chatWithBot: (
+    id: string,
+    payload: {
+      message: string;
+      history?: Array<{ sender: 'user' | 'bot'; content: string }>;
+    }
+  ) =>
+    request<{ reply: string; botId: string; model: string }>(`/api/chatbots/${id}/chat`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
